@@ -1,0 +1,279 @@
+#version 450 core
+// The creature kit. An animal is sculpted in its rest pose as a smooth union
+// of round cones, ellipsoids and flat fins, then turned into a mesh once at
+// load time. That takes three passes (uP & 3):
+//   0  the field at every corner of a grid.
+//   1  a vertex in every cell the surface crosses, at the mean of its edges'
+//      crossings (surface nets), with the field's normal and the two bones
+//      that hold it.
+//   2  a quad around every grid edge the surface crosses, joining its four
+//      cells, appended to an indirect indexed draw.
+// uP >> 2 picks the animal and its grid. 0 is the tyrannosaurus (scene 3), in
+// its own frame (x right, y up, z forward, 5 cm cells) as jr.vert's body()
+// expects it. 1-4 are scene 2's fish, crab, predator and whale, with +z
+// toward the head and in their old meshes' units, and fish.vert poses them.
+// Each part belongs to a bone, and a vertex blends the two bones whose parts
+// are nearest, so the joints bend smoothly and the seams don't show. The
+// tyrannosaurus's bones are the trunk (tail, body, neck), head, jaw, each
+// leg's thigh, shin, foot and toes, and the arms. The sea creatures' bones
+// are body 0, upper jaw 1, lower jaw 2, their fangs 3 and 4, and fins 5.
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+layout(std430, binding = 0) buffer Jf { float f[]; };    // the field at the corners
+layout(std430, binding = 1) buffer Ji { int id[]; };     // each cell's vertex (-1: none)
+layout(std430, binding = 2) buffer Jv { vec4 v[]; };     // vertices: rest point + bones; normal + blend
+layout(std430, binding = 3) buffer Je { uint e[]; };     // triangles
+layout(std430, binding = 4) buffer Jc { uint cmd[5]; uint nv; };   // the indirect draw; vertex count
+layout(location = 0) uniform int uP;
+
+// Each animal's grid: its size in corners (all within main.c's UW_GRID and
+// its dispatch), then its origin and its step.
+const ivec3 GS[5] = ivec3[](ivec3(49, 123, 278), ivec3(18, 23, 47), ivec3(39, 14, 17), ivec3(81, 101, 209), ivec3(53, 31, 159));
+const vec4 LS[5] = vec4[](vec4(-1.2, -.42, -8.1, .05), vec4(-.5, -.66, -1.72, .06), vec4(-1.3, -.47, -.5, .07),
+                          vec4(-.6, -.74, -1.8, .015), vec4(-.36, -.24, -1.16, .014));
+ivec3 G;
+vec3 LO;
+float S;
+int kind;
+
+float D, bm[12], cv;   // the field; each bone's nearest part; the field of the predator's mouth hollows
+
+// A round cone from a (radius r) to b (radius t), its section s times as tall as wide.
+float rc(vec3 p, vec3 a, vec3 b, float r, float t, float s){
+    vec3 k = vec3(1., 1. / s, 1.), ba = (b - a) * k, pa = (p - a) * k;
+    float h = clamp(dot(pa, ba) / dot(ba, ba), 0., 1.);
+    return (length(pa - ba * h) - mix(r, t, h)) * min(s, 1.);
+}
+float el(vec3 p, vec3 c, vec3 r){ return (length((p - c) / r) - 1.) * min(min(r.x, r.y), r.z); }
+// A fish's body: an ellipsoid with half-axes r, its section tapered toward the
+// nose (by kf) and the tail (by kb).
+float fish(vec3 p, vec3 r, float kf, float kb){
+    float z = p.z / r.z;
+    return el(vec3(p.xy / max(.1, 1. - (z > 0. ? kf : kb) * z * z), p.z), vec3(0.), r);
+}
+float l2(vec3 v){ return dot(v, v); }
+// A fin: the triangle abc, t thick either side.
+float fin(vec3 p, vec3 a, vec3 b, vec3 c, float t){
+    vec3 ba = b - a, cb = c - b, ac = a - c, pa = p - a, pb = p - b, pc = p - c, n = cross(ba, ac);
+    return sqrt(sign(dot(cross(ba, n), pa)) + sign(dot(cross(cb, n), pb)) + sign(dot(cross(ac, n), pc)) < 2.
+                ? min(min(l2(ba * clamp(dot(ba, pa) / l2(ba), 0., 1.) - pa), l2(cb * clamp(dot(cb, pb) / l2(cb), 0., 1.) - pb)),
+                      l2(ac * clamp(dot(ac, pc) / l2(ac), 0., 1.) - pc))
+                : dot(n, pa) * dot(n, pa) / l2(n)) - t;
+}
+// Melt part e (of bone b) into the creature, blending over k metres.
+void U(float e, int b, float k){
+    float h = max(k - abs(D - e), 0.) / k;
+    D = min(D, e) - h * h * k * .25;
+    bm[b] = min(bm[b], e);
+}
+// The predator's sail: the height of spine i over its back.
+float sp(float i){ return (mod(i, 2.) < .5 ? .55 : .3) * (1. - .05625 * i); }
+// p in the frame of the predator's jaw s (1 upper, -1 lower) when it's shut
+// against the other jaw, mirrored to the upper jaw's side of the mouth line.
+// The model is built open, as at gape .55, which is .4125 rad about each
+// hinge (fish.vert's jaw()).
+vec3 shut(vec3 p, float s){
+    vec2 q = mat2(.9161, -.4009 * s, .4009 * s, .9161) * (p.zy - vec2(.72, .06 * s));
+    return vec3(p.x, s * q.y + .06, q.x + .72);
+}
+// The whale's body section at s (0 where the flukes join, 1 at the snout
+// tip), as its old loft had it. Returns the half-width, the half-height and
+// the centre's height. The tail stock is slender and flattened from side to
+// side, the girth is deepest behind the flippers, and the rostrum is broad
+// and flat with the throat sagging below it.
+vec3 sec(float s){
+    float g = s < .62 ? .12 + .88 * pow(sin(s / .62 * 1.5707964), 1.8) : sqrt(max(0., 1. - pow((s - .62) / .38, 2.4)));
+    float t = 1. - smoothstep(0., .45, s), h = smoothstep(.55, .9, s);
+    return vec3(.17 * g * (1. - .45 * t + .14 * h), .17 * g * (1. + .25 * t - .22 * h),
+                -.035 * smoothstep(.5, .85, s) * (1. - smoothstep(.88, 1., s)));
+}
+// Scene 2's animals (kind 1-4), shaped like their old meshes. m is p mirrored
+// across x, and y is p mirrored across the body's mid-plane.
+void sea(vec3 p, vec3 m, vec3 y){
+    if (kind == 1) {                     // a fish: forked tail, dorsal, two pectorals
+        U(fish(p, vec3(.3, .34, .98), .55, .55), 0, .1);
+        U(fin(y, vec3(0., 0., -.8), vec3(0., .55, -1.65), vec3(0., 0., -1.32), .033), 5, .08);
+        U(fin(p, vec3(0., .28, .35), vec3(0., .6, -.15), vec3(0., .26, -.55), .033), 5, .08);
+        U(fin(m, vec3(.1, 0., .18), vec3(.44, -.12, 0.), vec3(.12, -.02, -.22), .033), 5, .06);
+        return;
+    }
+    if (kind == 2) {                     // a crab: a low, wide carapace, four legs a side and a claw
+        U(el(p, vec3(0., 0., .12), vec3(.9, .35, .42)), 0, .05);
+        for (int i = 0; i < 5; i++) {
+            vec3 a = i > 3 ? vec3(.4, .05, .3) : vec3(.7, -.06, .3 - .16 * float(i)),
+                 d = normalize(i > 3 ? vec3(.3, .4, .8) : vec3(1., -.6, .28 - .16 * float(i))) * (i > 3 ? .16 : .7);
+            U(rc(m, a, a + d, i > 3 ? .07 : .075, .045, 1.), 0, .04);
+            if (i > 3) U(el(m, a + d, vec3(.11, .085, .12)), 0, .03);
+        }
+        return;
+    }
+    if (kind == 3) {                     // the predator: lean, with a spiny sail and no snout (its head ends in its jaws)
+        U(max(fish(p, vec3(.22, .42, 1.1), .5, .8), p.z - .74), 0, .1);
+        // The jaws are blunt and gape wide. Each one is a deep round shell
+        // hollowed out behind its rim, the lower one longer (an underbite), with
+        // the throat between them. The rims are lined with long, uneven fangs.
+        // The upper fangs sit just inside the mouth and the lower ones just
+        // outside the upper jaw, so they cross when it bites.
+        float c = el(p, vec3(0., 0., .66), vec3(.1, .16, .2));
+        for (int s = 0; s < 2; s++) {
+            float f = float(s), g = 1. - 2. * f;
+            vec3 j = shut(m, g);
+            U(max(max(el(j, vec3(0., 0., .62 + .01 * f), vec3(.165 + .01 * f, .3, .34 + .03 * f)), -j.y), .64 - j.z), 1 + s, .05);
+            c = min(c, max(max(el(j, vec3(0., -.02, .62 + .01 * f), vec3(.12, .22, .28 + .02 * f)), -.01 - j.y), .55 - j.z));
+        }
+        D = max(D, -c);
+        cv = c;
+        for (int s = 0; s < 2; s++) {
+            float f = float(s), g = 1. - 2. * f;
+            vec3 j = shut(m, g);
+            for (int k = 0; k < 4; k++) {
+                float a = vec4(.2, .55, .95, 1.35)[k] + .18 * f, l = vec4(.17, .09, .13, .065)[k] * (1. + .3 * f),
+                      r = .13 + .042 * f, z = .29 + .075 * f;
+                vec3 b = vec3(r * sin(a), .005, .62 + .01 * f + z * cos(a));
+                U(rc(j, b + vec3(0., .03, 0.), b + vec3(.02 * f * sin(a), -l, -.25 * l), .018 + .1 * l, .002, 1.), 3 + s, .01);
+            }
+        }
+        // the sail: nine spines, alternately tall and short, with the
+        // membrane's edge zigzagging between their tips
+        float u = clamp((.45 - p.z) / 1.45, 0., 1.) * 8., i = min(floor(u), 7.), f = u - i;
+        U(max(max(abs(p.x) - .015, p.y - .18 + .0075 * u - mix(sp(i), sp(i + 1.), f)), max(abs(p.z + .275) - .725, -p.y)), 5, .03);
+        for (int k = 0; k < 9; k++) {
+            float z = .45 - .18125 * float(k), b = .18 - .0075 * float(k);
+            U(rc(p, vec3(0., b - .05, z), vec3(0., b + sp(float(k)), z), .03, .005, 1.), 5, .03);
+        }
+        U(fin(m, vec3(.1, -.02, .35), vec3(.55, -.22, -.05), vec3(.12, -.05, -.05), .015), 5, .04);
+        U(fin(y, vec3(0., 0., -.95), vec3(0., .65, -1.75), vec3(0., 0., -1.35), .015), 5, .06);
+        return;
+    }
+    // The whale: its loft, closed off at the root of the flukes, then swept,
+    // notched flukes and two slim flippers. It has no dorsal fin.
+    vec3 c = max(sec(clamp(p.z * .5 + .5, 0., 1.)), vec3(.001, .001, -1.));
+    U(max((length(vec2(p.x / c.x, (p.y - c.z) / c.y)) - 1.) * min(c.x, c.y), -.995 - p.z), 0, .1);
+    U(fin(m, vec3(0., 0., -.97), vec3(.3, 0., -1.145), vec3(0., 0., -1.09), .013), 5, .03);
+    U(rc(m, vec3(.115, -.085, .44), vec3(.325, -.185, .31), .04, .01, .3), 5, .03);
+}
+float map(vec3 p){
+    D = 1e9; cv = 1.;
+    for (int i = 0; i < 12; i++) bm[i] = 1e9;
+    vec3 m = vec3(abs(p.x), p.yz), y = vec3(p.x, abs(p.y), p.z);
+    if (kind > 0) { sea(p, m, y); return D; }
+    // the trunk, from tail tip to neck: deep-chested, the tail thick with
+    // muscle at its root
+    U(rc(p, vec3(0., 1.75, -7.95), vec3(0., 2.4, -5.7), .05, .28, 1.25), 0, .3);
+    U(rc(p, vec3(0., 2.4, -5.7), vec3(0., 3.2, -3.4), .28, .56, 1.25), 0, .3);
+    U(rc(p, vec3(0., 3.2, -3.4), vec3(0., 3.55, -1.2), .56, .8, 1.1), 0, .3);
+    U(rc(p, vec3(0., 3.55, -1.2), vec3(0., 3.15, .6), .8, .84, 1.3), 0, .4);
+    U(rc(p, vec3(0., 3.15, .6), vec3(0., 3.3, 2.), .84, .74, 1.32), 0, .4);
+    U(el(p, vec3(0., 2.8, 1.1), vec3(.6, .58, 1.2)), 0, .5);              // the belly
+    U(rc(p, vec3(0., 3.3, 2.), vec3(0., 3.8, 3.05), .74, .56, 1.25), 0, .3);
+    U(rc(p, vec3(0., 3.8, 3.05), vec3(0., 4.3, 3.8), .56, .46, 1.22), 0, .25);
+    U(rc(p, vec3(0., 4.3, 3.8), vec3(0., 4.6, 4.1), .44, .36, 1.2), 0, .2);
+    D += .005 * sin(p.z * 31.) * smoothstep(2.4, 3.2, p.z) * (1. - smoothstep(3.7, 4.1, p.z));   // folds round the neck
+    // The head: a deep, wedge-shaped skull narrowing to the snout, broad and low
+    // at the back where the jaw muscles are, with brow ridges over the eyes. The
+    // lip line is at y 4.42.
+    U(rc(p, vec3(0., 4.85, 4.), vec3(0., 4.6, 5.45), .28, .12, 1.55), 1, .15);
+    U(el(m, vec3(.25, 4.6, 4.12), vec3(.24, .28, .36)), 1, .12);            // the jaw muscles
+    U(el(m, vec3(.17, 5.01, 4.55), vec3(.08, .05, .18)), 1, .06);            // the brows
+    // the lower jaw: deep at the back, a U narrowing to the chin, with the
+    // throat inside the U
+    U(rc(m, vec3(.27, 4.3, 4.), vec3(.08, 4.33, 5.35), .14, .07, 1.3), 2, .1);
+    U(rc(p, vec3(0., 4.22, 4.15), vec3(0., 4.3, 5.2), .18, .07, 1.), 2, .12);
+    // the arms: tiny, two-clawed
+    U(rc(m, vec3(.42, 3.05, 2.55), vec3(.47, 2.67, 2.7), .1, .07, 1.), 11, .08);
+    U(rc(m, vec3(.47, 2.67, 2.7), vec3(.47, 2.71, 3.03), .07, .05, 1.), 11, .04);
+    U(rc(m, vec3(.47, 2.71, 3.03), vec3(.47, 2.62, 3.2), .04, .012, 1.), 11, .02);
+    // The legs (the right one, then mirrored for the left): a great thigh, the
+    // shin, the long foot and three toes. Each leg melts into the body on its
+    // own and never into the other leg: tr is the body's field so far, and the
+    // two body-plus-leg fields are joined with a plain min in lg. The thighs
+    // are slim from side to side, with the cone squeezed to half its width and
+    // the drumstick narrower and further out. That doesn't show from the side,
+    // and from the front they're two legs a hand apart under the belly.
+    // When the legs met at the midline, they melted into one skin from thigh
+    // to thigh down to the knees. Its vertices were held by both thighs, and
+    // the stride stretched it into a web between the legs. The top of the cone
+    // also took the flank above the hip for the thigh, and that skin slid
+    // against the body's. Each thigh melts into the body over 40 cm, which
+    // leaves a fillet at its back instead of a notch.
+    float tr = D, lg = 1e9;
+    for (int s = 0; s < 2; s++) {
+        D = tr;
+        vec3 q = vec3(s == 0 ? p.x : -p.x, p.yz), H = vec3(.32, 3.2, -.55), K = vec3(.39, 1.734, .347),
+             A = vec3(.45, .467, -.707), B = vec3(.45, -.25, -.4), X = vec3(2., 1., 1.);
+        int b = 3 + 4 * s;
+        U(rc(q * X, (H + vec3(0., .3, -.1)) * X, K * X, .55, .32, 1.15), b, .4);
+        U(el(q, mix(H, K, .45) + vec3(.15, 0., .02), vec3(.35, .9, .66)), b, .4);   // the drumstick of a thigh
+        U(rc(q, K, A, .28, .15, 1.15), b + 1, .12);
+        U(el(q, mix(K, A, .25) - vec3(0., 0., .1), vec3(.25, .5, .28)), b + 1, .15);  // the calf
+        U(rc(q, A, B, .14, .11, 1.), b + 2, .08);
+        for (int t = -1; t < 2; t++) {
+            vec3 d = normalize(vec3(.5 * float(t), -.148, .989)), T = B + d * (t == 0 ? .85 : .65);
+            U(rc(q, B + d * .05, T - vec3(0., .08, 0.), .14, .04, .8), b + 3, .06);
+            U(rc(q, T - d * .14 - vec3(0., .06, 0.), T + d * .06 - vec3(0., .14, 0.), .045, .008, 1.), b + 3, .03);   // the claw
+        }
+        lg = min(lg, D);
+    }
+    return lg;
+}
+int at(ivec3 c){ return c.x + G.x * (c.y + G.y * c.z); }
+void main(){
+    kind = uP >> 2;
+    G = GS[kind]; LO = LS[kind].xyz; S = LS[kind].w;
+    ivec3 c = ivec3(gl_GlobalInvocationID);
+    if (any(greaterThanEqual(c, G))) return;
+    int i = at(c), P = uP & 3;
+    if (P < 2) {
+        vec3 q = LO + S * vec3(c);
+        if (P == 1) {
+            id[i] = -1;
+            if (any(equal(c, G - 1))) return;
+            vec3 a = vec3(0.);
+            float n = 0.;
+            for (int k = 0; k < 8; k++) for (int b = 0; b < 3; b++) {
+                if ((k >> b & 1) == 1) continue;
+                ivec3 c0 = ivec3(k & 1, k >> 1 & 1, k >> 2), c1 = c0;
+                c1[b] = 1;
+                float f0 = f[i + at(c0)], f1 = f[i + at(c1)];
+                if (f0 < 0. == f1 < 0.) continue;
+                a += vec3(c0) + vec3(equal(ivec3(b), ivec3(0, 1, 2))) * f0 / (f0 - f1);
+                n++;
+            }
+            if (n == 0.) return;
+            q += S * a / n;
+        }
+        // The field here is sampled last, after the three offset samples the
+        // vertex's normal needs, so that bm is left holding this point's bones.
+        // map() has only this one call site, so the creatures' code is compiled
+        // once.
+        vec4 g;
+        for (int k = 3 * (1 - P); k < 4; k++) g[k] = map(q + .01 * vec3(equal(ivec3(k), ivec3(0, 1, 2))));
+        if (P == 0) { f[i] = g.w; return; }
+        uint o = atomicAdd(nv, 1u);
+        if (o > 199999u) return;
+        // the two nearest bones, and how much of the second
+        int b0 = 0, b1 = 1;
+        for (int b = 1; b < 12; b++) if (bm[b] < bm[b0]) b0 = b;
+        if (b0 == 1) b1 = 0;
+        for (int b = 0; b < 12; b++) if (b != b0 && bm[b] < bm[b1]) b1 = b;
+        v[2 * o] = vec4(q, b0 + 16 * b1 + (cv < .02 ? 256 : 0));   // +256: inside the predator's mouth
+        v[2 * o + 1] = vec4(normalize(g.xyz - g.w), 1. / (1. + exp((bm[b1] - bm[b0]) * 40.)));
+        id[i] = int(o);
+        return;
+    }
+    // a quad around each edge from this corner (+x, +y, +z) that the surface crosses
+    for (int x = 0; x < 3; x++) {
+        int u = (x + 1) % 3, w = (x + 2) % 3;
+        ivec3 cx = ivec3(0), cu = ivec3(0), cw = ivec3(0);
+        cx[x] = 1; cu[u] = 1; cw[w] = 1;
+        if (c[x] == G[x] - 1 || c[u] == 0 || c[w] == 0) continue;
+        bool in0 = f[i] < 0.;
+        if (in0 == f[i + at(cx)] < 0.) continue;
+        int A = id[i - at(cu) - at(cw)], B = id[i - at(cw)], C = id[i], E = id[i - at(cu)];
+        if (min(min(A, B), min(C, E)) < 0) continue;
+        if (in0 == (kind == 0)) { int t = B; B = E; E = t; }   // facing out (the tyrannosaurus's frame is mirrored)
+        uint o = atomicAdd(cmd[0], 6u);
+        if (o > 1199994u) return;
+        e[o] = uint(A); e[o + 1] = uint(B); e[o + 2] = uint(C);
+        e[o + 3] = uint(A); e[o + 4] = uint(C); e[o + 5] = uint(E);
+    }
+}

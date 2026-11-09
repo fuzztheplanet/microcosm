@@ -1,0 +1,3 @@
+/* scene 3, the giant trees, their crowns, palms and lianas: MC_PROGRAM(field, vs, fs) per program */
+MC_PROGRAM(jt, "jt.vert", "jt.frag")
+MC_PROGRAM(jt_bake, "sky.vert", "jt_bake.frag")

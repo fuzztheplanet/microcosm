@@ -1,0 +1,11 @@
+/* Scene 3's programs, one manifest per jungle package (MC_PROGRAM only, no
+ * bakes). programs.def pulls this in for startup, hot reload and validation,
+ * and the Demo struct gets one mc_shader field per entry from it. */
+#include "s3_trees.def"
+#include "s3_under.def"
+#include "s3_light.def"
+#include "s3_bug.def"
+#include "s3_birds.def"
+#include "s3_rex.def"
+#include "s3_blob.def"
+#include "s3_beach.def"

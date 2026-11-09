@@ -1,0 +1,3 @@
+/* scene 3, the tyrannosaurus: MC_PROGRAM(field, vs, fs) per program */
+MC_PROGRAM(jr_rex, "jr.vert", "jr.frag")
+MC_PROGRAM(jr_mesh, "jr.comp", "jr.comp")   /* compute: the one shader is named twice */

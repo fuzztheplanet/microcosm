@@ -1,0 +1,689 @@
+#+TITLE: Tutorial: make your own 64k intro with MICROCOSM
+#+SUBTITLE: From a ten-line shader to a size-optimised binary
+#+SETUPFILE: setup.org
+#+OPTIONS: toc:3
+
+[[file:index.org][↑ Back to the index]]
+
+There are two ways into MICROCOSM, and you should start with the small one.
+
+If all you want is a fragment shader on screen, such as a plasma, an SDF scene
+or a shadertoy-style experiment, reach for =tiny64.h=. It's a header-only facade
+over the engine, and it gets you a windowed, animated shader in about ten lines.
+
+When one shader stops being enough, because you want meshes, a camera,
+instancing, the HDR post stack, a soundtrack or a packed 64k file, drop the
+facade and use the full =mc_= API. The rest of this tutorial builds that up,
+from an empty file to a size-optimised binary, and ends with what a demo
+directory of your own needs. For a finished example, read
+=demos/hello-world/main.c= alongside it.
+
+Prerequisites: a Linux box with the [[https://github.com/fuzztheplanet/microcosm#requirements][requirements]]
+installed, and the MICROCOSM tree. Every command below runs from the top of the
+tree.
+
+* 0. The ten-line version (tiny64)
+:PROPERTIES:
+:CUSTOM_ID: 0-the-ten-line-version-tiny64
+:END:
+
+#+begin_src c
+#define TINY64_IMPL          // pull in the implementation (exactly one .c)
+#define TINY64_SHORT_NAMES   // running(), swap(), shader(), uniform1f(), ...
+#include <microcosm/tiny64.h>
+
+static const char *FRAG =
+    "#version 450 core\n"
+    "in vec2 uv; out vec4 o; uniform float t;\n"
+    "void main(){ o = vec4(0.5 + 0.5*cos(t + uv.xyx + vec3(0,2,4)), 1.0); }";
+
+int main(void) {
+    if (!t64_open(1280, 720, "hi")) return 1;
+    shader(FRAG);
+    while (running()) {
+        uniform1f("t", (float)t64_time());
+        fullscreen_quad();
+        swap();
+    }
+    t64_close();
+}
+#+end_src
+
+That's a complete intro. Your fragment shader gets a full-screen quad, an
+=in vec2 uv= in =[0,1]=, and whatever uniforms you set by name with
+=t64_set1f=, =t64_set2f= and the rest (or the =uniform1f(...)= shorthand). It
+leaves out HDR, bloom and meshes, because it's meant for when the shader is the
+whole demo.
+
+To build it, save it as =hi.c= at the top of the tree, compile it against the
+engine sources and link the windowed backend. =render.c= includes the engine's
+post-pass shaders as a generated header, so generate that first:
+
+#+begin_src sh
+python3 tools/genshaders.py --raw --engine src/shaders --engine-output build/inc/mc_engine_shaders.h
+gcc -Iinclude -Ibuild/inc \
+    src/math.c src/gl_loader.c src/platform_common.c \
+    src/mesh.c src/render.c src/scene.c src/platform_x11_egl.c \
+    hi.c -lEGL -lX11 -lm -lpthread -lasound -o hi
+./hi                # ESC to quit
+#+end_src
+
+=tiny64.h= only calls the public engine API, so it links like any other program
+that uses MICROCOSM. The =TINY64_SHORT_NAMES= macros are opt-in because the bare
+names can collide with ordinary code. =time()= would clash with =<time.h>=, so
+it has no short name, and you call =t64_time()= instead.
+
+tiny64 is for windowed builds like this one, and it can't be packed into a 64k
+file. The packed payload's compile doesn't declare =mc_uniform=, =mc_set_f= or
+=mc_set_v3=, which tiny64 uses to set uniforms by name, because the payload
+loads no GL call for them. =t64_close= also calls =mc_window_close=, which the
+payload leaves out as well, since it just exits. So a tiny64 program saved as
+=demos/<name>/main.c= gets a dev binary from =make <name>=, but the release half
+of the build fails to compile. To ship it in 64k, move it to the full API, which
+the rest of this tutorial uses.
+
+* 1. Open a window and make a renderer
+:PROPERTIES:
+:CUSTOM_ID: 1-open-a-window-and-make-a-renderer
+:END:
+
+Opening a window makes a GL 4.5 core context current and loads the GL function
+table for you. Make the renderer at the window's size, which is its /output/
+size: the size of the picture =mc_renderer_end= puts on screen. The HDR scene
+target it draws into has an internal resolution of its own, a percentage of the
+output size set with =mc_renderer_set_scale= (25-200, and 100 by default).
+Below 100 the post stack's TAA upsamples the picture into its output-size
+history, and above 100 it supersamples. To render at a lower resolution, lower
+the scale rather than making the renderer smaller. A renderer smaller than the
+framebuffer it's resolved into is drawn centred in it with black around it,
+which is how the demo letterboxes a screen of a different shape.
+
+#+begin_src c
+#include "microcosm/mc_platform.h"
+#include "microcosm/mc_render.h"
+#include "microcosm/mc_mesh.h"
+#include "microcosm/mc_scene.h"
+#include "microcosm/mc_math.h"
+#include "microcosm/mc.h"
+#include <math.h>
+#include "microcosm/mc_imports.h"   // always the last include (see below)
+
+mc_window_desc desc = { .width = 1280, .height = 720,
+                        .title = "my intro", .vsync = 1 };
+mc_window *w = mc_window_open(&desc);
+if (!w) return 1;
+
+mc_renderer *R = mc_renderer_make(1280, 720);        // output: the window's size
+if (!R || !mc_renderer_set_scale(R, 75)) return 1;   // render 960x540; the TAA upsamples
+#+end_src
+
+=mc_imports.h= does nothing until you pack the intro, and then it has to come
+after every other header. [[#mc-imports-h-goes-last][mc_imports.h goes last]]
+explains why.
+
+* 2. Build and upload a mesh
+:PROPERTIES:
+:CUSTOM_ID: 2-build-and-upload-a-mesh
+:END:
+
+Meshes are built on the CPU (=mc_mesh.h=) and then uploaded to GPU buffers
+(=mc_mesh_upload=, in =mc_render.h=). You can apply as many modifiers as you
+like before uploading, and once the mesh is uploaded you can free the CPU copy.
+
+#+begin_src c
+mc_mesh m = mc_mesh_icosphere(1.0f, 3);         // radius, subdivisions
+mc_mesh_displace_noise(&m, 0.12f, 1.8f, 0xBEEFu); // make it organic
+mc_gpu_mesh gpu = mc_mesh_upload(&m);
+mc_mesh_free(&m);                                 // GPU has its own copy now
+#+end_src
+
+=mc_mesh_upload= binds vertex attribute 0 to the position and 1 to the normal,
+so your vertex shader should declare those locations. The CPU builders use
+=realloc= and =free=, which matters once you pack the intro (see
+[[#free-and-realloc][free and realloc]]).
+
+* 3. Write a shader
+:PROPERTIES:
+:CUSTOM_ID: 3-write-a-shader
+:END:
+
+=mc_shader_make= takes GLSL source strings. Scene shaders output linear HDR,
+and the post stack does the tonemapping to sRGB, so don't gamma-correct in your
+shader. Give every uniform you set from C a =layout(location = N)= that's
+unique within the program (an array takes N, N+1 and so on), and set it by that
+number. Nothing is looked up by name, although =mc_uniform= can still find a
+uniform that has no location by its name, outside the packed build. A sampler
+on any unit other than 0 gets a =layout(binding = N)= in the same way, so no C
+code assigns texture units either.
+
+#+begin_src c
+static const char *VS =
+    "#version 450 core\n"
+    "layout(location=0) in vec3 aPos;"
+    "layout(location=1) in vec3 aNormal;"
+    "layout(location=0) uniform mat4 uViewProj;"
+    "layout(location=1) uniform mat4 uModel;"
+    "out vec3 vN;"
+    "void main(){"
+    "  vN = mat3(uModel) * aNormal;"
+    "  gl_Position = uViewProj * uModel * vec4(aPos, 1.0);"
+    "}";
+
+static const char *FS =
+    "#version 450 core\n"
+    "in vec3 vN; out vec4 o;"
+    "void main(){"
+    "  vec3 L = normalize(vec3(0.4, 0.8, 0.3));"
+    "  float d = max(dot(normalize(vN), L), 0.0);"
+    "  vec3 col = vec3(0.05, 0.06, 0.1) + vec3(1.0, 0.6, 0.3) * d;"
+    "  o = vec4(col, 1.0);"
+    "}";
+
+enum { U_VIEWPROJ = 0, U_MODEL = 1 };   // the shader's uniform locations
+mc_shader sh = mc_shader_make(VS, FS);
+#+end_src
+
+#+begin_quote
+Strings in C are the simplest way to start. Once the shaders grow, move them
+into files in your own demo's =demos/<name>/shaders/=, so you can edit them
+while the dev build runs. The release build then bakes them into the binary,
+and your =main.c= has to fetch them from there
+([[#shaders-on-disk-need-shaders-gen-h][Shaders on disk need shaders_gen.h]]).
+Reloading them as you save is code in your demo, not in the engine
+([[#hot-reloading-shaders][Hot-reloading shaders]]).
+#+end_quote
+
+* 4. The begin, draw, end loop
+:PROPERTIES:
+:CUSTOM_ID: 4-the-begin-draw-end-loop
+:END:
+
+Each frame, pump events (=mc_window_pump= returns 0 on =ESC= or when the window
+closes), tell the renderer the frame's time and build your matrices. Then call
+=mc_renderer_begin=, draw, and call =mc_renderer_end=. Matrices are
+column-major and =mc_m4_mul(a, b)= is =a * b=, so the view-projection is
+=proj * view=, but let =mc_renderer_camera= build it for you. It shifts the
+projection by a sub-pixel step each frame, and the post stack's TAA blends
+those frames into an anti-aliased picture. If you leave out
+=mc_renderer_frame= and =mc_renderer_camera=, you still get frames, just
+without anti-aliasing.
+
+#+begin_src c
+double start = mc_time_seconds();
+while (mc_window_pump(w)) {
+    double t = mc_time_seconds() - start;
+    int ww, hh; mc_window_size(w, &ww, &hh);
+    mc_renderer_resize(R, ww, hh);                        // follow the window (same scale)
+    mc_renderer_frame(R, t);                              // TAA: this frame's time
+
+    mc_camera cam = mc_camera_default();
+    cam.pos = mc_vec3(4.0f * cosf((float)t), 1.5f, 4.0f * sinf((float)t));
+    mc_m4 view = mc_camera_view(&cam);
+    mc_m4 proj = mc_camera_proj(&cam, mc_renderer_aspect(R));
+    mc_m4 vp   = mc_renderer_camera(R, proj, view);       // proj * view, jittered
+
+    mc_quat q   = mc_quat_axis_angle(mc_vec3(0, 1, 0), (float)t);
+    mc_m4 model = mc_m4_trs(mc_vec3(0, 0, 0), q, mc_v3_splat(1.0f));
+
+    mc_renderer_begin(R, mc_vec3(0.02f, 0.02f, 0.05f));  // bind HDR target + clear
+    mc_shader_use(sh);
+    mc_set_m4(U_VIEWPROJ, vp);
+    mc_set_m4(U_MODEL, model);
+    mc_mesh_draw(gpu);
+
+    mc_post post = mc_post_defaults();
+    post.time = (float)t;                                 // animates grain
+    mc_renderer_end(R, mc_window_output_fbo(w), ww, hh, post);  // post -> window
+
+    mc_window_swap(w);
+}
+#+end_src
+
+=mc_window_output_fbo(w)= is framebuffer 0 on the windowed backend, so the post
+stack resolves straight to the screen. When the window is resized,
+=mc_renderer_resize= resizes the renderer to match, at the same scale, and the
+TAA's history starts over. If the size hasn't changed it returns straight away.
+A failed resize, to 0x0 for example, keeps the previous targets.
+
+** Drawing a crowd: instancing
+:PROPERTIES:
+:CUSTOM_ID: drawing-a-crowd-instancing
+:END:
+
+To draw many copies cheaply, fill an =mc_instance= array (a model matrix and an
+RGB + emissive colour for each) and issue one instanced draw. Size the buffer
+once, up front, so it doesn't reallocate during the animation. The instanced
+path needs a vertex shader that reads attributes 2-5 as the model matrix's
+columns and attribute 6 as the colour, like
+=demos/hello-world/shaders/object.vert=.
+
+#+begin_src c
+mc_mesh_reserve_instances(&gpu, 512);      // once, after upload
+/* each frame: */
+mc_instance inst[512];
+int n = 0;
+for (int i = 0; i < 256; ++i) {
+    mc_m4 mdl = mc_m4_trs(/* position */, /* rotation */, /* scale */);
+    inst[n].model = mdl;
+    inst[n].color = mc_vec4(1.0f, 0.6f, 0.3f, 0.0f);  // .a = emissive
+    ++n;
+}
+mc_mesh_set_instances(&gpu, inst, n);
+mc_mesh_draw_instanced(gpu, n);
+#+end_src
+
+* 5. Add the synth
+:PROPERTIES:
+:CUSTOM_ID: 5-add-the-synth
+:END:
+
+The synth renders interleaved stereo frames, and the audio backend runs it on
+its own thread. Drive your clock from =mc_audio_time()= so the visuals stay
+locked to the music. If audio fails to start, fall back to the wall clock.
+
+#+begin_src c
+#include "microcosm/mc_audio.h"     // before mc_imports.h, like every header
+
+static void audio_pull(float *out, int frames, void *user) {
+    mc_synth_render((mc_synth *)user, out, frames);
+}
+
+mc_synth *synth = mc_synth_make(0x1234u);
+mc_audio *audio = mc_audio_start(audio_pull, synth);   // may be NULL
+/* in the loop: */
+double t = audio ? mc_audio_time(audio) : (mc_time_seconds() - start);
+/* at shutdown (step 6 explains MC_TIDY): */
+MC_TIDY(if (audio) mc_audio_stop(audio);
+        mc_synth_free(synth));
+#+end_src
+
+Use the timeline helpers to sync motion to the beat:
+
+#+begin_src c
+mc_timeline tl = { .t = t, .duration = mc_synth_length(synth), .bpm = mc_synth_bpm(synth) };
+float bounce = mc_beat_pulse(&tl, 5.0f);   // 0..1 spike each beat
+#+end_src
+
+* 6. Clean up
+:PROPERTIES:
+:CUSTOM_ID: 6-clean-up
+:END:
+
+#+begin_src c
+MC_TIDY(mc_mesh_gpu_free(&gpu);
+        mc_shader_free(&sh);
+        mc_renderer_free(R);
+        mc_window_close(w));
+#+end_src
+
+Put the cleanup inside =MC_TIDY(...)= from =mc.h=. The packed 64k build just
+exits and lets the OS take everything back, so =mc_window_close=,
+=mc_audio_stop= and =mc_mesh_gpu_free= aren't even declared there. =MC_TIDY=
+compiles its arguments out of that build, and every other build runs them.
+[[file:toolkit.org::#mc-h-umbrella-types-utilities][The toolkit]] has the
+details.
+
+* The complete program
+:PROPERTIES:
+:CUSTOM_ID: the-complete-program
+:END:
+
+This is the whole windowed intro, put together from the steps above. Save it as
+=demos/my-intro/main.c=. It compiles cleanly with =-Wall -Wextra=, as an
+ordinary program and as a packed 64k file.
+
+#+begin_src c
+/* demos/my-intro/main.c - a minimal MICROCOSM intro. */
+#include "microcosm/mc_platform.h"
+#include "microcosm/mc_render.h"
+#include "microcosm/mc_mesh.h"
+#include "microcosm/mc_scene.h"
+#include "microcosm/mc_math.h"
+#include "microcosm/mc.h"
+#include "microcosm/mc_audio.h"
+#include <math.h>
+#include "microcosm/mc_imports.h"   /* last: the packed build calls libraries through it */
+
+static const char *VS =
+    "#version 450 core\n"
+    "layout(location=0) in vec3 aPos;"
+    "layout(location=1) in vec3 aNormal;"
+    "layout(location=0) uniform mat4 uViewProj;"
+    "layout(location=1) uniform mat4 uModel;"
+    "out vec3 vN;"
+    "void main(){"
+    "  vN = mat3(uModel) * aNormal;"
+    "  gl_Position = uViewProj * uModel * vec4(aPos, 1.0);"
+    "}";
+
+static const char *FS =
+    "#version 450 core\n"
+    "in vec3 vN; out vec4 o;"
+    "void main(){"
+    "  vec3 L = normalize(vec3(0.4, 0.8, 0.3));"
+    "  float d = max(dot(normalize(vN), L), 0.0);"
+    "  vec3 col = vec3(0.05, 0.06, 0.1) + vec3(1.0, 0.6, 0.3) * d;"
+    "  o = vec4(col, 1.0);"
+    "}";
+
+static void audio_pull(float *out, int frames, void *user) {
+    mc_synth_render((mc_synth *)user, out, frames);
+}
+
+int main(void) {
+    mc_window_desc desc = { .width = 1280, .height = 720,
+                            .title = "my intro", .vsync = 1 };
+    mc_window *w = mc_window_open(&desc);
+    if (!w) return 1;
+
+    mc_renderer *R = mc_renderer_make(1280, 720);
+    if (!R || !mc_renderer_set_scale(R, 75)) return 1;
+
+    mc_mesh m = mc_mesh_icosphere(1.0f, 3);
+    mc_mesh_displace_noise(&m, 0.12f, 1.8f, 0xBEEFu);
+    mc_gpu_mesh gpu = mc_mesh_upload(&m);
+    mc_mesh_free(&m);
+
+    enum { U_VIEWPROJ = 0, U_MODEL = 1 };   // the shader's uniform locations
+    mc_shader sh = mc_shader_make(VS, FS);
+
+    mc_synth *synth = mc_synth_make(0x1234u);
+    mc_audio *audio = mc_audio_start(audio_pull, synth);
+
+    double start = mc_time_seconds();
+    while (mc_window_pump(w)) {
+        double t = audio ? mc_audio_time(audio) : (mc_time_seconds() - start);
+        int ww, hh;
+        mc_window_size(w, &ww, &hh);
+        mc_renderer_resize(R, ww, hh);
+        mc_renderer_frame(R, t);
+
+        mc_camera cam = mc_camera_default();
+        cam.pos = mc_vec3(4.0f * cosf((float)t), 1.5f, 4.0f * sinf((float)t));
+        mc_m4 view = mc_camera_view(&cam);
+        mc_m4 proj = mc_camera_proj(&cam, mc_renderer_aspect(R));
+        mc_m4 vp   = mc_renderer_camera(R, proj, view);
+
+        mc_quat q   = mc_quat_axis_angle(mc_vec3(0, 1, 0), (float)t);
+        mc_m4 model = mc_m4_trs(mc_vec3(0, 0, 0), q, mc_v3_splat(1.0f));
+
+        mc_renderer_begin(R, mc_vec3(0.02f, 0.02f, 0.05f));
+        mc_shader_use(sh);
+        mc_set_m4(U_VIEWPROJ, vp);
+        mc_set_m4(U_MODEL, model);
+        mc_mesh_draw(gpu);
+
+        mc_post post = mc_post_defaults();
+        post.time = (float)t;
+        mc_renderer_end(R, mc_window_output_fbo(w), ww, hh, post);
+
+        mc_window_swap(w);
+    }
+
+    /* the packed build leaves this out and just exits (step 6) */
+    MC_TIDY(if (audio) mc_audio_stop(audio);
+            mc_synth_free(synth);
+            mc_mesh_gpu_free(&gpu);
+            mc_shader_free(&sh);
+            mc_renderer_free(R);
+            mc_window_close(w));
+    return 0;
+}
+#+end_src
+
+** Building it with make
+:PROPERTIES:
+:CUSTOM_ID: dropping-it-into-demos
+:END:
+
+Every directory under =demos/= with a =main.c= in it is a demo, and the
+Makefile builds it by name. With the program saved as =demos/my-intro/main.c=:
+
+#+begin_src sh
+make my-intro     # builds both binaries into build/my-intro/:
+                  #   my-intro-dev.bin  (debuggable, on-screen)
+                  #   my-intro.bin  (the 64k self-extractor)
+make my-intro PACK=quick   # the same, without the packer's slow search
+./build/my-intro/my-intro-dev.bin   # ESC to quit
+./build/my-intro/my-intro.bin       # the packed one
+make all          # build every demo under demos/
+make clean
+#+end_src
+
+Each demo builds into its own =build/<name>/=, so demos never overwrite each
+other's files. =make <demo>= builds that demo's two binaries, and a bare =make=
+(the same as =make all=) builds every demo under =demos/=. This intro keeps its
+GLSL in C strings, so it needs nothing else in its directory.
+[[#what-a-demo-directory-needs][What a demo directory needs]] covers the rest:
+shader files, the =programs.def= manifest and the import list. Copying
+=demos/hello-world/= is another way to start, with all of that already in
+place.
+
+** Building it by hand
+:PROPERTIES:
+:CUSTOM_ID: building-it
+:END:
+
+You can also compile the program yourself, against the engine sources, with
+exactly one platform backend (=platform_x11_egl.c= for a window). Generate the
+engine's shader header first, as in step 0:
+
+#+begin_src sh
+gcc -Wall -Wextra -Iinclude -Ibuild/inc \
+    src/math.c src/gl_loader.c src/platform_common.c \
+    src/mesh.c src/render.c src/scene.c src/synth.c src/audio.c \
+    src/platform_x11_egl.c demos/my-intro/main.c \
+    -lEGL -lX11 -lm -lpthread -lasound -o mintro
+./mintro            # ESC to quit
+#+end_src
+
+That gives you the windowed program only. The packed file needs the release
+build, which is what =make= is for.
+
+** Scrubbing while you work
+:PROPERTIES:
+:CUSTOM_ID: scrubbing-while-you-work
+:END:
+
+It's worth giving your dev build (=<name>-dev.bin=) the transport the
+reference demo uses to inspect its timeline. SPACE pauses, LEFT and RIGHT jump
+5 seconds, and UP and DOWN double or halve the speed. Look for =dev_transport=
+in =demos/hello-world/main.c=. It's defined under
+=#if !defined(MC_RELEASE) && !defined(MC_HEADLESS) && !defined(MC_CAPTURE)=
+and called only outside the release and headless builds, so it costs nothing in
+the shipped file. If your intro simulates anything, it has to be able to jump
+backwards too, which the demo's =sim_seek= does by replaying from a fixed seed.
+Being able to stop on one frame and step back and forth around it makes tuning
+a transition much quicker.
+
+* 7. Build for size
+:PROPERTIES:
+:CUSTOM_ID: 7-build-for-size
+:END:
+
+=make my-intro= already does this: the release half of the build is the 64k
+pipeline. In short, these are its main steps:
+
+1. Minify and bake the shaders, the demo's and the engine's post-pass ones,
+   into headers:
+   =python3 tools/genshaders.py demos/my-intro/shaders -o build/my-intro/shaders_gen.h --engine src/shaders --engine-output build/my-intro/mc_engine_shaders.h=.
+   A demo with shader files has to include the first header in its release
+   build ([[#shaders-on-disk-need-shaders-gen-h][Shaders on disk need shaders_gen.h]]).
+2. Compile for size. Use the release flags
+   (~-Oz -ffast-math -flto -ffunction-sections -fdata-sections -fno-pic -fno-pie -fvisibility=hidden -DMC_RELEASE ...~),
+   plus =-DMC_IMPORT_HASH= for the payload, and link with
+   ~--gc-sections -z norelro -s ...~ and the payload's own entry point,
+   =src/mc_start.c=. The full set is in the =Makefile= (=REL_FLAGS=,
+   =REL_LDFLAGS=, =PAYLOAD_DEFS= and =PAYLOAD_LDFLAGS=).
+3. Strip the ELF with =python3 tools/elfshrink.py build/you.elf -o build/you.elf --verify=.
+4. Pack it into one ELF. =tools/mkelf.sh build/you.elf you.bin= produces a
+   self-extracting ELF: the coded program inside a libc-free launcher that
+   decodes it with a context-mixing model and runs it from memory. Before it
+   writes the file, it checks that the file decompresses back to the original
+   ELF and fits in 65,536 bytes.
+
+For the reference demo, that turns a release ELF of about 249 KB into the
+63,237-byte =hello-world.bin=. The pipeline doc tells the whole story, from
+[[file:pipeline.org::#the-size-flags-grouped][the flags]] to
+[[file:pipeline.org::#the-tools][the tools]] and
+[[file:pipeline.org::#the-real-numbers][where the bytes go]]. Its tools
+section also covers the steps the Makefile adds to these four.
+
+* What a demo directory needs
+:PROPERTIES:
+:CUSTOM_ID: what-a-demo-directory-needs
+:END:
+
+The Makefile treats every =demos/<name>/main.c= as a demo, and =make <name>=
+builds it. This is what the build expects to find in the directory, and what
+it leaves to your code.
+
+#+begin_example
+demos/my-intro/
+├── main.c          required, and the only file the Makefile compiles
+├── programs.def    the program manifest, if the demo has shaders/
+├── shaders/        optional: *.vert, *.frag, *.comp and *.glsl files
+└── *.c, *.def      anything else main.c includes
+#+end_example
+
+The Makefile compiles =main.c= and nothing else from the directory. To split a
+demo into several files, =#include= them from =main.c=, as the reference demo
+does with =scene3.c=. Make tracks those includes, so editing one rebuilds the
+demo.
+
+** Shaders on disk need shaders_gen.h
+:PROPERTIES:
+:CUSTOM_ID: shaders-on-disk-need-shaders-gen-h
+:END:
+
+If =demos/<name>/shaders/= holds any shader files, the release build minifies
+them together with the engine's post-pass shaders and bakes them all into one
+blob in =build/<name>/shaders_gen.h=. The engine then gets its own shaders
+through =mc_shader_at()=, which only that header defines. So your =main.c= has
+to include it under =MC_RELEASE=, or the payload's link fails with
+=undefined reference to `mc_shader_at'=. The header also gives each program's
+two sources by index:
+
+#+begin_src c
+#ifdef MC_RELEASE
+#include "shaders_gen.h"   /* in build/<name>/, which is on the release include path */
+static mc_shader program_source(int i) {
+    return mc_shader_make(mc_shader_at(mc_program_shaders[i][0]),
+                          mc_shader_at(mc_program_shaders[i][1]));
+}
+#endif
+#+end_src
+
+=mc_program_shaders[i]= holds the blob indices of program =i='s two files, in
+=programs.def= order (next section). =mc_demo_shader("name.frag")= finds a
+shader by file name instead, but the payload's compile leaves it out because
+the payload has no =strcmp=, so only tools and checks can use it. The dev build
+doesn't get this header at all. There your code reads the files itself, from
+=MC_SHADER_ROOT=, the absolute path of =demos/<name>/shaders= that Make passes
+to the dev compile.
+
+A demo without shader files, like the intro above, needs none of this. Its
+engine shaders go into a header of their own. See
+[[file:pipeline.org::#genshaders-py-bake-shaders-into-headers][=genshaders.py=]]
+for how the bake works.
+
+** The programs.def manifest
+:PROPERTIES:
+:CUSTOM_ID: the-programs-def-manifest
+:END:
+
+=demos/<name>/programs.def= lists the demo's shader programs, and
+=genshaders.py= reads it to build =mc_program_shaders=. It's an X-macro list,
+with one entry per line:
+
+#+begin_src c
+/* demos/my-intro/programs.def */
+MC_PROGRAM(blob,  "blob.vert",  "blob.frag")
+MC_PROGRAM(place, "place.comp", "place.comp")   /* compute: its one file, twice */
+MC_BAKE("quad.vert", "bake.frag")               /* drawn once at load */
+#include "more.def"                             /* more entries, in place */
+#+end_src
+
+Each entry is =MC_PROGRAM(field, "vertex file", "fragment file")= or
+=MC_BAKE("vertex file", "fragment file")=, naming files in =shaders/=. The
+script treats the two the same: counting from 0 in file order, with included
+manifests expanded where they're included, entry =i= becomes
+=mc_program_shaders[i]=. It reads the file a line at a time, so keep each entry
+on one line, with both file names as string literals. A compute program names
+its =.comp= file twice, and =mc_shader_make= builds a compute program when both
+stages get the same source.
+
+What =field= and the difference between the two macros mean is up to your C
+code. =main.c= defines =MC_PROGRAM= and =MC_BAKE=, includes the file, and gets
+an enum of program numbers, a struct field per program or a table of file
+names for the dev build, all in the same order. The reference demo does all
+three, so look for =programs.def= in its =main.c=. There a bake gets no field,
+because it's used once and freed. Make treats every =*.def= in the directory as
+an input of the bake, so editing the manifest bakes the shaders again.
+
+** mc_imports.h goes last
+:PROPERTIES:
+:CUSTOM_ID: mc-imports-h-goes-last
+:END:
+
+Include =microcosm/mc_imports.h= in =main.c= after every other header, the
+system headers too. In the payload build (=MC_IMPORT_HASH=) it turns each
+library function on its list into a macro that calls through a table, which
+the payload's entry point fills by name hash
+([[file:pipeline.org::#keeping-libc-dropping-the-crt-and-the-import-table][the pipeline doc]]
+explains why). Each macro takes its type from the system header's declaration,
+so that header has to come first. A system header included after it would have
+its own declarations rewritten and fail to compile.
+
+Leave the include out and your own calls go to the libraries by name. In the
+intro above GCC can even merge the =sinf= and =cosf= of one angle into one
+=sincosf=, which isn't on the list at all. In every other build the header is
+empty, so a mistake here only shows in the packed file.
+
+** free and realloc
+:PROPERTIES:
+:CUSTOM_ID: free-and-realloc
+:END:
+
+The import list holds what the reference demo's payload calls, and that doesn't
+include =free= or =realloc=, because the demo builds every mesh in its
+shaders. The CPU mesh builders grow their arrays with =realloc=, and
+=mc_mesh_free= and =mc_mesh_upload= call =free=. If your intro uses them, as
+the one above does, its payload imports those two by name. It still builds and
+runs, but it then carries a symbol table, a glibc version requirement and two
+relocations. In the intro above that's about 100 bytes of the packed file.
+
+To have them found by hash like everything else, add them to
+=include/microcosm/mc_imports.h=, to the list and beside =calloc='s macro:
+
+#+begin_src c
+#define MC_IMPORTS(X) \
+    X(malloc) X(calloc) X(realloc) X(free) X(getenv) X(strtol) \
+    ...
+#define calloc          MC_IMP(calloc)
+#define realloc         MC_IMP(realloc)
+#define free            MC_IMP(free)
+#+end_src
+
+=tools/genimports.py= hashes the new list on the next build. The list is
+shared by every demo, though, and the reference demo's payload calls neither
+function. Its build checks strictly that every import is used
+([[file:pipeline.org::#importcheck-py-the-payload-resolves-only-what-it-calls][=importcheck.py=]]),
+so after that change =make hello-world= fails with "the payload resolves these
+at startup but never calls them". Build it with
+~make hello-world IMPORTCHECK=warn~ from then on, which costs it a few bytes.
+Other demos are only warned about unused imports anyway.
+
+** Hot-reloading shaders
+:PROPERTIES:
+:CUSTOM_ID: hot-reloading-shaders
+:END:
+
+The engine doesn't watch files. Reading GLSL from disk and reloading it when it
+changes is the reference demo's own code, in its =main.c= under
+=#ifndef MC_RELEASE=. =build_program= reads a program's two files from
+=MC_SHADER_ROOT=. =maybe_reload_shaders=, called once a frame, hashes the files
+every quarter of a second and rebuilds the programs whose files changed. Then
+it swaps them all in together, or keeps the old ones if any of them fails to
+compile. Copy those functions if you want the same in your demo. The release
+build has no =MC_SHADER_ROOT= and reads nothing from disk.

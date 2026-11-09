@@ -1,0 +1,30 @@
+# Documentation targets.  setup.org is the #+SETUPFILE header that every page
+# pulls in, so it isn't exported on its own.  export.el holds the export
+# settings.  The HTML is kept next to the .org files, so rebuild it whenever a
+# .org file changes.
+EMACS ?= emacs
+PAGES := $(filter-out setup.org,$(wildcard *.org))
+
+.PHONY: help html ids clean have-emacs
+
+help:
+	@echo "make html   - export every page to HTML (needs emacs; open index.html)"
+	@echo "make ids    - give every heading without a CUSTOM_ID one, from its text"
+	@echo "make clean  - remove the exported HTML"
+
+html: $(PAGES:.org=.html)
+	@echo "docs exported to *.html (open index.html)"
+
+%.html: %.org setup.org export.el | have-emacs
+	$(EMACS) --batch -Q -l ./export.el "$<" -f org-html-export-to-html
+
+ids: | have-emacs
+	for f in $(PAGES); do \
+		$(EMACS) --batch -Q -l ./export.el "$$f" -f microcosm-docs-add-custom-ids || exit 1; \
+	done
+
+have-emacs:
+	@command -v $(EMACS) >/dev/null 2>&1 || { echo "emacs not found; install it to build the docs"; exit 1; }
+
+clean:
+	rm -f $(PAGES:.org=.html)

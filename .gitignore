@@ -1,0 +1,12 @@
+build/
+*.o
+*.bin
+*.elf
+# Videos too, including media/hello-world-1080p60.mp4, which is bigger than
+# the 100 MB GitHub allows in a repository and is published as a release asset.
+*.mp4
+*.gen.c
+*.gen.h
+microcosm
+!microcosm/
+!src/microcosm

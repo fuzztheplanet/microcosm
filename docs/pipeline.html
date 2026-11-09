@@ -1,0 +1,2427 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The MICROCOSM pipeline: getting to 64k</title>
+<meta name="generator" content="Org Mode" />
+<style type="text/css">
+  #content { max-width: 60em; margin: auto; }
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #e6e6e6;
+    border-radius: 3px;
+    background-color: #f2f2f2;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: auto;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    top: -8px;
+    right: 12px;
+    padding: 3px;
+    color: #555;
+    background-color: #f2f2f299;
+  }
+  pre.src:hover:before { display: inline; margin-top: 14px;}
+  /* Languages per Org manual */
+  pre.src-asymptote:before { content: 'Asymptote'; }
+  pre.src-awk:before { content: 'Awk'; }
+  pre.src-authinfo::before { content: 'Authinfo'; }
+  pre.src-c:before { content: 'C'; }
+  pre.src-C:before { content: 'C'; }
+  /* pre.src-C++ doesn't work in CSS */
+  pre.src-clojure:before { content: 'Clojure'; }
+  pre.src-css:before { content: 'CSS'; }
+  pre.src-D:before { content: 'D'; }
+  pre.src-ditaa:before { content: 'ditaa'; }
+  pre.src-dot:before { content: 'Graphviz'; }
+  pre.src-calc:before { content: 'Emacs Calc'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-fortran:before { content: 'Fortran'; }
+  pre.src-gnuplot:before { content: 'gnuplot'; }
+  pre.src-haskell:before { content: 'Haskell'; }
+  pre.src-hledger:before { content: 'hledger'; }
+  pre.src-java:before { content: 'Java'; }
+  pre.src-js:before { content: 'JavaScript'; }
+  pre.src-latex:before { content: 'LaTeX'; }
+  pre.src-ledger:before { content: 'Ledger'; }
+  pre.src-lisp:before { content: 'Lisp'; }
+  pre.src-lilypond:before { content: 'Lilypond'; }
+  pre.src-lua:before { content: 'Lua'; }
+  pre.src-matlab:before { content: 'MATLAB'; }
+  pre.src-mscgen:before { content: 'Mscgen'; }
+  pre.src-ocaml:before { content: 'Objective Caml'; }
+  pre.src-octave:before { content: 'Octave'; }
+  pre.src-org:before { content: 'Org mode'; }
+  pre.src-oz:before { content: 'OZ'; }
+  pre.src-plantuml:before { content: 'Plantuml'; }
+  pre.src-processing:before { content: 'Processing.js'; }
+  pre.src-python:before { content: 'Python'; }
+  pre.src-R:before { content: 'R'; }
+  pre.src-ruby:before { content: 'Ruby'; }
+  pre.src-sass:before { content: 'Sass'; }
+  pre.src-scheme:before { content: 'Scheme'; }
+  pre.src-screen:before { content: 'Gnu Screen'; }
+  pre.src-sed:before { content: 'Sed'; }
+  pre.src-sh:before { content: 'shell'; }
+  pre.src-sql:before { content: 'SQL'; }
+  pre.src-sqlite:before { content: 'SQLite'; }
+  /* additional languages in org.el's org-babel-load-languages alist */
+  pre.src-forth:before { content: 'Forth'; }
+  pre.src-io:before { content: 'IO'; }
+  pre.src-J:before { content: 'J'; }
+  pre.src-makefile:before { content: 'Makefile'; }
+  pre.src-maxima:before { content: 'Maxima'; }
+  pre.src-perl:before { content: 'Perl'; }
+  pre.src-picolisp:before { content: 'Pico Lisp'; }
+  pre.src-scala:before { content: 'Scala'; }
+  pre.src-shell:before { content: 'Shell Script'; }
+  pre.src-ebnf2ps:before { content: 'ebfn2ps'; }
+  /* additional language identifiers per "defun org-babel-execute"
+       in ob-*.el */
+  pre.src-cpp:before  { content: 'C++'; }
+  pre.src-abc:before  { content: 'ABC'; }
+  pre.src-coq:before  { content: 'Coq'; }
+  pre.src-groovy:before  { content: 'Groovy'; }
+  /* additional language identifiers from org-babel-shell-names in
+     ob-shell.el: ob-shell is the only babel language using a lambda to put
+     the execution function name together. */
+  pre.src-bash:before  { content: 'bash'; }
+  pre.src-csh:before  { content: 'csh'; }
+  pre.src-ash:before  { content: 'ash'; }
+  pre.src-dash:before  { content: 'dash'; }
+  pre.src-ksh:before  { content: 'ksh'; }
+  pre.src-mksh:before  { content: 'mksh'; }
+  pre.src-posh:before  { content: 'posh'; }
+  /* Additional Emacs modes also supported by the LaTeX listings package */
+  pre.src-ada:before { content: 'Ada'; }
+  pre.src-asm:before { content: 'Assembler'; }
+  pre.src-caml:before { content: 'Caml'; }
+  pre.src-delphi:before { content: 'Delphi'; }
+  pre.src-html:before { content: 'HTML'; }
+  pre.src-idl:before { content: 'IDL'; }
+  pre.src-mercury:before { content: 'Mercury'; }
+  pre.src-metapost:before { content: 'MetaPost'; }
+  pre.src-modula-2:before { content: 'Modula-2'; }
+  pre.src-pascal:before { content: 'Pascal'; }
+  pre.src-ps:before { content: 'PostScript'; }
+  pre.src-prolog:before { content: 'Prolog'; }
+  pre.src-simula:before { content: 'Simula'; }
+  pre.src-tcl:before { content: 'tcl'; }
+  pre.src-tex:before { content: 'TeX'; }
+  pre.src-plain-tex:before { content: 'Plain TeX'; }
+  pre.src-verilog:before { content: 'Verilog'; }
+  pre.src-vhdl:before { content: 'VHDL'; }
+  pre.src-xml:before { content: 'XML'; }
+  pre.src-nxml:before { content: 'XML'; }
+  /* add a generic configuration mode; LaTeX export needs an additional
+     (add-to-list 'org-latex-listings-langs '(conf " ")) in .emacs */
+  pre.src-conf:before { content: 'Configuration File'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .equation-container {
+    display: table;
+    text-align: center;
+    width: 100%;
+  }
+  .equation {
+    vertical-align: middle;
+  }
+  .equation-label {
+    display: table-cell;
+    text-align: right;
+    vertical-align: middle;
+  }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  .org-svg { }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism-themes/1.9.0/prism-one-light.min.css" integrity="sha384-wfpYO27rpeJ2ZOVwfG6TuU4ahxLdxLmGXK/BiSH98jJye0CNNWTOM+kA8rP8Yg4p" crossorigin="anonymous">
+<script>window.Prism = window.Prism || {}; window.Prism.manual = true;</script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/prism.min.js" integrity="sha384-xAgN7OCsK5s0d3G18tqRYrxy8hWsPA14E26TMh7Mi9ZM09vaz4EA0DBTl+80F5yC" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/components/prism-c.min.js" integrity="sha384-gaD4ncierlmWk42Z3BmTp37/z+Dqt8V4Wf74UjTvFeo+M+SgnEI6Ysd98pWhksQv" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/components/prism-bash.min.js" integrity="sha384-9WmlN8ABpoFSSHvBGGjhvB3E/D8UkNB9HpLJjBQFC2VSQsM1odiQDv4NbEo+7l15" crossorigin="anonymous"></script>
+<script>document.addEventListener("DOMContentLoaded", function () {
+if (!window.Prism || !Prism.highlightElement) return;
+/* Org marks blocks as pre.src-LANG > code; Prism wants the class language-LANG on the code element. */
+document.querySelectorAll("pre.src > code").forEach(function (code) {
+var m = code.parentElement.className.match(/\bsrc-(\S+)/);
+if (m && Prism.languages[m[1]]) { code.classList.add("language-" + m[1]); Prism.highlightElement(code); }
+});
+});</script>
+<script>document.addEventListener("DOMContentLoaded", function () {
+/* A pilcrow after each heading links to it. A click puts the link in the URL bar and on the clipboard. */
+document.querySelectorAll("h2[id], h3[id], h4[id]").forEach(function (h) {
+var page = location.pathname.split("/").pop() || "index.html";
+var a = document.createElement("a");
+a.className = "heading-link";
+a.href = "#" + h.id;
+a.title = page + "#" + h.id;
+a.textContent = "¶";
+a.addEventListener("click", function (e) {
+e.preventDefault();
+history.replaceState(null, "", "#" + h.id);
+navigator.clipboard.writeText(location.href).then(function () {
+a.textContent = "✓";
+setTimeout(function () { a.textContent = "¶" }, 1200);
+});
+});
+h.appendChild(a);
+});
+});</script>
+<style> a.heading-link{margin-left:.4em;font-size:.7em;opacity:0;text-decoration:none;vertical-align:middle;transition:opacity .15s} h2:hover a.heading-link,h3:hover a.heading-link,h4:hover a.heading-link{opacity:.6} a.heading-link:hover{opacity:1 !important} </style>
+<style> body{max-width:52em;margin:2em auto;padding:0 1em;line-height:1.55;font-family:Georgia,"Times New Roman",serif;color:#1a1a1a} h1,h2,h3,h4{font-family:-apple-system,Helvetica,Arial,sans-serif;line-height:1.2} pre.src,pre.example{overflow-x:auto;background:#f6f8fa;padding:.6em;border-radius:4px;margin:1.2em} pre.src code{background:none;padding:0;font-size:.8125rem} table{border-collapse:collapse;margin:1em 0} th,td{border:1px solid #ccc;padding:.25em .6em} code{background:#f0f0f0;padding:0 .25em;border-radius:3px} blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:1em;color:#444} a{color:#0645ad} </style>
+</head>
+<body>
+<div id="content" class="content">
+<h1 class="title">The MICROCOSM pipeline: getting to 64k
+<br />
+<span class="subtitle">Build flavours, the flags, and the tools that keep the demo under 64 KB</span>
+</h1>
+<div id="table-of-contents" role="doc-toc">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents" role="doc-toc">
+<ul>
+<li><a href="#the-real-numbers">1. The real numbers</a>
+<ul>
+<li><a href="#where-the-bytes-go">1.1. Where the bytes go</a></li>
+</ul>
+</li>
+<li><a href="#build-flavours">2. Build flavours</a>
+<ul>
+<li><a href="#one-tree-several-demos">2.1. One tree, several demos</a></li>
+<li><a href="#recording-the-video">2.2. Recording the video</a>
+<ul>
+<li><a href="#the-stills-and-the-poster">2.2.1. The stills and the poster</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#the-size-flags-grouped">3. The size flags, grouped</a>
+<ul>
+<li><a href="#codegen-rel-flags">3.1. Codegen (<code>REL_FLAGS</code>)</a></li>
+<li><a href="#linker-rel-ldflags">3.2. Linker (<code>REL_LDFLAGS</code>)</a></li>
+<li><a href="#payload-only-payload-defs-payload-ldflags">3.3. Payload only (<code>PAYLOAD_DEFS</code>, <code>PAYLOAD_LDFLAGS</code>)</a></li>
+<li><a href="#strip-compress-post-link">3.4. Strip &amp; compress (post-link)</a></li>
+</ul>
+</li>
+<li><a href="#keeping-libc-dropping-the-crt-and-the-import-table">4. Keeping libc, dropping the CRT and the import table</a></li>
+<li><a href="#the-zero-gl-import-loader">5. The zero-GL-import loader</a></li>
+<li><a href="#why-opengl-and-not-vulkan-or-d3d12">6. Why OpenGL, and not Vulkan or D3D12</a></li>
+<li><a href="#the-tools">7. The tools</a>
+<ul>
+<li><a href="#make-targets-and-variables">7.1. Make targets and variables</a></li>
+<li><a href="#glslmin-py-safe-glsl-minifier">7.2. <code>glslmin.py</code>: a safe GLSL minifier</a></li>
+<li><a href="#genshaders-py-bake-shaders-into-headers">7.3. <code>genshaders.py</code>: bake shaders into headers</a></li>
+<li><a href="#shadercost-py-what-each-shader-costs-in-the-64k">7.4. <code>shadercost.py</code>: what each shader costs in the 64k</a></li>
+<li><a href="#codecost-py-what-each-function-costs-in-the-64k">7.5. <code>codecost.py</code>: what each function costs in the 64k</a></li>
+<li><a href="#genimports-py-hash-the-payload-import-list">7.6. <code>genimports.py</code>: hash the payload's import list</a></li>
+<li><a href="#importcheck-py-the-payload-resolves-only-what-it-calls">7.7. <code>importcheck.py</code>: the payload resolves only what it calls</a></li>
+<li><a href="#elfshrink-py-drop-the-section-header-table">7.8. <code>elfshrink.py</code>: drop the section-header table</a></li>
+<li><a href="#textrange-py-the-code-file-range-for-the-packer">7.9. <code>textrange.py</code>: the code's file range, for the packer</a></li>
+<li><a href="#funcorder-py-lay-the-functions-out-for-the-packer">7.10. <code>funcorder.py</code>: lay the functions out for the packer</a></li>
+<li><a href="#fpround-py-the-float-constants-rounded">7.11. <code>fpround.py</code>: the float constants, rounded</a></li>
+<li><a href="#mkelf-sh-pack-py-cm-h-s2dec-s-mcstub-c-s1dec-s-the-elf-self-extractor">7.12. <code>mkelf.sh</code> / <code>pack.py</code> + <code>cm.h</code> + <code>s2dec.S</code> + <code>mcstub.c</code> + <code>s1dec.S</code>: the ELF self-extractor</a></li>
+<li><a href="#capture-sh-the-release-video">7.13. <code>capture.sh</code>: the release video</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<p>
+<a href="index.html">↑ Back to the index</a>
+</p>
+
+<p>
+The whole demo, with its engine, geometry, shaders and a 279-second soundtrack,
+runs from one file inside the classic 64 KB budget of 65,536 bytes. This page
+tells how, starting with the numbers from this tree and where the bytes go. Then
+come the build flavours and the video capture, what each compiler and linker
+flag buys, how the payload gets by without an import table, and each tool in
+<code>tools/</code>.
+</p>
+
+<p>
+The build does three things. It compiles for size, strips everything the loader
+never looks at, and compresses the result with an x86-aware context-mixing coder
+behind a small freestanding self-extractor.
+</p>
+
+<pre class="example" id="org8ef2693">
+demos/hello-world/shaders/*.{vert,frag,comp}  +  src/shaders/*.{vert,frag} (post passes)
+   └─► genshaders.py ─► glslmin.py (minify, one shared rename) ─► build/&lt;demo&gt;/shaders_gen.h
+                                        (a baked mc_demo_shader() lookup)
+                                     └─► build/&lt;demo&gt;/mc_engine_shaders.h (POST_VS, BRIGHT_FS, ...)
+
+include/microcosm/mc_imports.h ─► genimports.py ─► build/&lt;demo&gt;/mc_imports_gen.h
+                                        (24 bits of name hash per library import)
+
+src/*.c  +  demos/hello-world/main.c  +  the three generated headers  +  src/mc_start.c
+   └─► gcc -Oz -flto …  ─►  ld -nostartfiles --gc-sections … -s -Map  ─►  first link
+          (its code assembled through fpround.py: the float constants rounded, their pool sorted)
+          └─► funcorder.py: functions laid out by similarity ─► second link (same code)
+                 └─► importcheck.py: every GL/import slot called, no import hash shared
+                 └─► textrange.py: the .text file range ─► .release/payload.range
+                 └─► elfshrink.py validates/strips ─► .release/payload.elf (private intermediate)
+                        └─► mkelf.sh / pack.py: x86 transform, CM model search, launcher
+                               (its second stage coded by its first: s1pack.c, s1dec.S)
+                               └─► validate/decode/size gates ─► atomic &lt;demo&gt;.bin ← the 64k artifact
+</pre>
+
+<hr />
+<div id="outline-container-the-real-numbers" class="outline-2">
+<h2 id="the-real-numbers"><span class="section-number-2">1.</span> The real numbers</h2>
+<div class="outline-text-2" id="text-the-real-numbers">
+<p>
+A full search on this tree printed the following; its last line is the
+<code>dist</code> step's budget report. A cached rebuild searches fewer candidates and
+its measured decode time varies with host load.
+</p>
+
+<pre class="example" id="orge29a2cd">
+genshaders: 56 shaders, 697847 -&gt; 178874 bytes minified -&gt; build/hello-world/shaders_gen.h
+genshaders: 10 shaders, 34729 -&gt; 10019 bytes minified -&gt; build/hello-world/mc_engine_shaders.h
+MICROCOSM: 63237 / 65536 bytes; 2299 free; round-trip OK (1.77 s decode); stream 59929 + launcher 3308 bytes; 15 masks, searched 201 candidates
+</pre>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Stage</th>
+<th scope="col" class="org-left">Size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">Shader source (56 demo + 10 post-pass files)</td>
+<td class="org-left">732,576 bytes</td>
+</tr>
+
+<tr>
+<td class="org-left">Shaders minified (<code>glslmin.py</code>, one shared rename)</td>
+<td class="org-left">188,893 bytes; the stored blob and shared dictionary occupy 132,020 bytes including terminators</td>
+</tr>
+
+<tr>
+<td class="org-left">Uncompressed release ELF (private intermediate)</td>
+<td class="org-left">241,936 bytes (code 99,049)</td>
+</tr>
+
+<tr>
+<td class="org-left">Compressed payload (x86-aware context mixing with APMs, searched configuration)</td>
+<td class="org-left">59,929 bytes</td>
+</tr>
+
+<tr>
+<td class="org-left">Launcher, in two stages: the first stage's ELF header and decoder, plus the coded second stage (hand-written asm)</td>
+<td class="org-left">3,308 bytes</td>
+</tr>
+
+<tr>
+<td class="org-left"><b>Compressed ELF self-extractor</b> (<code>hello-world.bin</code>), the 64k artifact</td>
+<td class="org-left"><b>63,237 bytes</b> (96.5% of budget, 2,299 free)</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+Under the classic rules the size that counts is the file you ship and run, the
+self-extracting ELF <code>hello-world.bin</code>. The uncompressed ELF is only a step on
+the way. It's nearly four times the limit, and that's fine, because nobody
+submits it. <code>mkelf.sh</code> checks the budget against the <code>.bin</code> and fails the build
+if it ever goes over 64 KB. Built with GCC 16.2.1, the <code>.bin</code> fits with 2,299
+bytes to spare, and other toolchains will drift a little from that.
+</p>
+
+<p>
+An earlier version of the demo occupied 64,365 bytes. A
+reduction pass replaced the volumetric jungle clouds with a clear sky, removed
+dust and screen-space beach reflections, simplified the predator path builder
+and seabed population recipe, and corrected first-stage model costs. It saved
+1,842 bytes. The end-card and tyrannosaurus revisions then used 151 bytes,
+and the later visual and musical polish used another 563 bytes, including
+the thin sky wisps. The current version remains 1,128 bytes (1.75%) smaller
+than that 64,365-byte version. These gains interact through the compressor and
+cannot be added from isolated feature measurements.
+</p>
+
+<p>
+A general-purpose packer couldn't get it in. An x86 BCJ filter with LZMA1, the
+usual choice for a self-extracting ELF, packs a payload like this one about 36%
+bigger than this coder does. Context mixing, with models made for x86 code and
+for the GLSL text, closes that gap
+(<a href="#mkelf-sh-pack-py-cm-h-s2dec-s-mcstub-c-s1dec-s-the-elf-self-extractor">the self-extractor</a>
+has the details).
+</p>
+
+<p>
+For each successful candidate the build writes <code>build/&lt;demo&gt;/.release/pack.json</code>.
+It records the input and output hashes, the input, stream, launcher and packed
+sizes, and the budget. It also records the coder's configuration and the code
+range it used, whether the configuration was searched and how many candidates
+were tried, the decode time on the build host, and the compiler (its
+<code>--version</code> text).
+</p>
+
+<p>
+The launcher unpacks the demo in under two seconds. The time in the report is
+the shipped decoder running on the build host, so it varies with the machine
+and its load. The decoder needs about 152 MiB (159 MB) of memory. That's the
+sum of the tables <code>cm.h</code> declares, at this build's configuration. They're all
+<code>.bss</code>, so they cost no file bytes.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Table</th>
+<th scope="col" class="org-left">Memory</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">The context slots: 2^26 two-byte counters (<code>CM_TB</code> 26)</td>
+<td class="org-left">128 MiB</td>
+</tr>
+
+<tr>
+<td class="org-left">The match model: 2^22 four-byte positions</td>
+<td class="org-left">16 MiB</td>
+</tr>
+
+<tr>
+<td class="org-left">The two APMs: (256 + 65,536) × 33 two-byte buckets</td>
+<td class="org-left">4.1 MiB</td>
+</tr>
+
+<tr>
+<td class="org-left">The first-layer mixers' weights: 32,512 sets × 27 inputs × 4 bytes (15 masks, three extra models, six mixers)</td>
+<td class="org-left">3.3 MiB</td>
+</tr>
+
+<tr>
+<td class="org-left">Everything else, the decoded payload included</td>
+<td class="org-left">under 1 MiB</td>
+</tr>
+
+<tr>
+<td class="org-left">All of them</td>
+<td class="org-left">about 152 MiB</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="outline-container-where-the-bytes-go" class="outline-3">
+<h3 id="where-the-bytes-go"><span class="section-number-3">1.1.</span> Where the bytes go</h3>
+<div class="outline-text-3" id="text-where-the-bytes-go">
+<p>
+<code>make code-report</code> and <code>make shader-report</code> replay the packer's model over the
+payload and charge each coded bit to the function, array or shader it falls in
+(<a href="#codecost-py-what-each-function-costs-in-the-64k"><code>codecost.py</code></a> and
+<a href="#shadercost-py-what-each-shader-costs-in-the-64k"><code>shadercost.py</code></a>). On this
+build the stream divides up like this.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Part</th>
+<th scope="col" class="org-left">Stream</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">The shaders: their minified text in one blob with a shared dictionary, and the small table and functions that unpack it</td>
+<td class="org-left">29,439 B</td>
+</tr>
+
+<tr>
+<td class="org-left">Scenes 1 and 2 and the end card (<code>main.c</code>)</td>
+<td class="org-left">12,531 B</td>
+</tr>
+
+<tr>
+<td class="org-left">Scene 3 (<code>scene3.c</code> and its packages, <code>s3_*.c</code>)</td>
+<td class="org-left">6,649 B</td>
+</tr>
+
+<tr>
+<td class="org-left">The softsynth and the song (<code>synth.c</code>), and the ALSA backend (<code>audio.c</code>)</td>
+<td class="org-left">4,979 B</td>
+</tr>
+
+<tr>
+<td class="org-left">The engine: renderer, math, entry point and import resolver, window, GL loader, scene</td>
+<td class="org-left">4,882 B</td>
+</tr>
+
+<tr>
+<td class="org-left">The float constant pool, the ELF headers and dynamic tables, string literals, padding and unattributed bytes</td>
+<td class="org-left">1,424 B</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+These are rounded model costs; the ideal code lengths total about
+59,904 B, and the real stream is 59,929 B including coder overhead. A part's cost also depends on
+everything before it in the file, so each figure is what that part adds where
+it stands.
+</p>
+
+<p>
+Nearly half the stream is GLSL. The costliest shaders build geometry on the
+GPU: the jungle's trees (<code>jt.vert</code>, about 2,368 B), Scene 2's seabed placement
+(<code>uwplace.comp</code>, 2,350 B), the creature kit that sculpts the animals
+(<code>jr.comp</code>, 1,796 B) and the blob ashore with what it carries
+(<code>jo_blob.vert</code>, 1,617 B). On the C side the costliest function is
+<code>render_scene2</code> (2,490 B), then the synth's <code>mc_synth_render</code> (1,581 B) and
+<code>uw_prepare</code>, which sorts Scene 2's props into batches each frame (1,196 B).
+Add the launcher's 3,308 bytes, and 2,299 of the 65,536 are left.
+</p>
+
+<hr />
+</div>
+</div>
+</div>
+<div id="outline-container-build-flavours" class="outline-2">
+<h2 id="build-flavours"><span class="section-number-2">2.</span> Build flavours</h2>
+<div class="outline-text-2" id="text-build-flavours">
+<p>
+There are only a few targets.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Target</th>
+<th scope="col" class="org-left">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left"><code>make &lt;demo&gt;</code></td>
+<td class="org-left">Build one demo's two binaries (e.g. <code>make hello-world</code>).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make all</code> (or just <code>make</code>)</td>
+<td class="org-left">Build every demo under <code>demos/</code>, two binaries each.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make clean</code></td>
+<td class="org-left">Remove the whole <code>build/</code> tree.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make shader-report</code></td>
+<td class="org-left">Build the demo's release, then list what each shader and each shared-text entry costs in the packed file (<code>tools/shadercost.py</code>).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make code-report</code></td>
+<td class="org-left">The same for code and data: each function, each named array, the unnamed rest, and each source file (<code>tools/codecost.py</code>).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make capture</code></td>
+<td class="org-left">Record the release video, 1920x1080 at 60 fps with the soundtrack, as <code>media/&lt;demo&gt;-1080p60.mp4</code> (<a href="#recording-the-video">below</a>). Needs <code>ffmpeg</code> with libx264.</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+Each demo builds two binaries in its own <code>build/&lt;demo&gt;/</code>.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Binary</th>
+<th scope="col" class="org-left">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left"><code>build/&lt;demo&gt;/&lt;demo&gt;-dev.bin</code></td>
+<td class="org-left">On-screen and debuggable (<code>-g -O0</code>, asserts, logging). Shaders are read from disk (<code>demos/&lt;demo&gt;/shaders/</code>), so you can edit them while it runs.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>build/&lt;demo&gt;/&lt;demo&gt;.bin</code></td>
+<td class="org-left">The minimal self-extracting 64k ELF: the release ELF (shaders minified and baked in, section headers stripped), packed by <code>mkelf.sh</code>. This is the 64k artifact.</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+<code>make &lt;demo&gt;</code> re-enters make with <code>DEMO=&lt;demo&gt;</code> and runs the internal <code>dev</code> and
+<code>dist</code> steps. The <code>.dev/</code> and <code>.release/</code> object directories are kept apart and
+hold generated header dependencies and configuration stamps. Make rebuilds only
+what depends on changed inputs, and changing the flags, the source lists or the
+compiler also invalidates the work that depends on them. <code>dist</code> keeps
+<code>.release/payload.elf</code> to itself and publishes <code>&lt;demo&gt;.bin</code> atomically, and
+only after it passes validation. Shader headers are replaced only when the
+generated bytes change, and a success stamp saves repeating work after edits
+that only touch comments.
+</p>
+
+<p>
+<code>PACK=quick</code> packs with the coder's default configuration, which is handy while
+iterating. The default, <code>PACK=full</code>, searches for the best configuration and
+caches the winner by payload, code range, compiler and the packer's own
+sources, so a later <code>PACK=quick</code> build of the same payload reuses it.
+<code>FPROUND=0</code> links the payload with its float constants as written
+(<a href="#fpround-py-the-float-constants-rounded"><code>fpround.py</code></a>), which gives the
+payload you'd get without that step, for comparison. Both binaries link the
+on-screen backend <code>platform_x11_egl.c</code>, and only the <code>.bin</code> has a size limit.
+</p>
+</div>
+<div id="outline-container-one-tree-several-demos" class="outline-3">
+<h3 id="one-tree-several-demos"><span class="section-number-3">2.1.</span> One tree, several demos</h3>
+<div class="outline-text-3" id="text-one-tree-several-demos">
+<p>
+A demo is a directory under <code>demos/</code>. Each one builds into its own
+<code>build/&lt;name&gt;/</code>, so two demos never write the same file, and independent demos
+can build in parallel with <code>make -j all</code>.
+</p>
+
+<pre class="example" id="org1b18518">
+demos/
+├── hello-world/       the reference demo (DEMO's default)
+│   ├── main.c         the show: Scenes 1 and 2 and the end card
+│   ├── scene3.c       Scene 3, which includes its packages, s3_*.c
+│   ├── programs.def   the program manifest (it includes scene3.def and s3_*.def)
+│   └── shaders/       56 shader files (*.vert / *.frag / *.comp)
+└── my-intro/          your next one
+    ├── main.c
+    └── shaders/       (optional - omit it if your GLSL is inlined as strings)
+</pre>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>make hello-world             # build/hello-world/{hello-world-dev.bin, hello-world.bin}
+make my-intro                # build/my-intro/{my-intro-dev.bin, my-intro.bin}
+make all                     # every demo under demos/
+</code></pre>
+</div>
+
+<p>
+The dev build gets <code>MC_SHADER_ROOT</code>, the demo's shader directory, and reads its
+shaders from disk. The release build runs <code>genshaders.py</code> for every demo. It
+bakes the files in <code>shaders/</code> and the engine's post-pass shaders into one blob
+in <code>build/&lt;name&gt;/shaders_gen.h</code>, in the order of the program manifest. A demo
+without shader files still goes through the bake, and the engine's shaders then
+go into <code>mc_engine_shaders.h</code> on their own. A <code>tiny64</code> program builds as a dev
+binary but can't be packed into a 64k payload. The payload compile leaves out
+<code>mc_window_close</code>, <code>mc_uniform</code>, <code>mc_set_f</code> and <code>mc_set_v3</code>, and the facade
+calls all four. What a demo directory needs is in
+<a href="tutorial.html#what-a-demo-directory-needs">the tutorial</a>.
+</p>
+</div>
+</div>
+<div id="outline-container-recording-the-video" class="outline-3">
+<h3 id="recording-the-video"><span class="section-number-3">2.2.</span> Recording the video</h3>
+<div class="outline-text-3" id="text-recording-the-video">
+<p>
+<code>make capture</code> records the show as the release video: 1920x1080 at 60 fps with
+its soundtrack, every frame rendered offline. The result is
+<code>media/&lt;demo&gt;-1080p60.mp4</code>, and <code>VIDEO</code> puts it somewhere else. It sits outside
+<code>build/</code>, so <code>make clean</code> doesn't delete it. Nothing is shown or played while
+it runs.
+</p>
+
+<p>
+The published video was made this way from the current demo, and the
+repository stills are frames taken from it (see
+<a href="#the-stills-and-the-poster">The stills and the poster</a>). It was rendered
+on a laptop's Intel UHD 620 integrated graphics using Mesa, at
+3840x2160 internally and downsampled to 1920x1080. Its 60 fps is the playback
+rate of an offline render, not a measured real-time frame rate on that GPU.
+</p>
+
+<p>
+It builds a third binary, <code>build/&lt;demo&gt;/&lt;demo&gt;-capture</code>. That's the demo's
+capture <code>main()</code> (<code>-DMC_CAPTURE</code>, surfaceless EGL), built with the release
+flags but linked the normal way, without <code>fpround.py</code>. So its pictures match
+the <code>.bin</code>'s, Scene 1's collision sim included, apart from that rounding. It
+renders each frame and streams it to stdout as raw RGBA. With
+<code>MC_CAP_AUDIO=&lt;file&gt;</code> it writes the soundtrack to that file instead, as float32
+stereo at 44.1 kHz.
+</p>
+
+<p>
+<code>tools/capture.sh</code> runs it twice, once for the soundtrack and once for the
+frames. It makes the video in two steps, so that the slow render only happens
+once.
+</p>
+
+<p>
+First the frames go into a near-lossless master,
+<code>build/&lt;demo&gt;/capture/master.mkv</code> (x264 <code>faster</code> at CRF 8). For the whole show
+that's 16,722 frames and about 2.5 GB, so leave about 3 GB free. The published
+version's master took about 57 minutes on the Intel UHD 620 laptop, before
+the two final encoding passes. If a run stops after the
+master is finished, the next run reuses it, as long as the binary and the
+settings are the same.
+</p>
+
+<p>
+Then x264 encodes the master in two passes (<code>slow</code>, <code>-tune film</code>,
+<code>aq-mode=3</code>, high profile at level 4.2), at an average of 10 Mb/s with peaks
+held to 40 Mb/s. The soundtrack goes in as AAC at 256 kb/s, and the picture is
+converted to BT.709 and tagged as such. The two passes add to the master's
+time. When the video is written, <code>build/&lt;demo&gt;/capture/</code> is deleted.
+</p>
+
+<p>
+The published video comes to about 357 MB. Its bitrate was chosen for the
+video's film grain and fast reef flight. At 2.5 Mb/s, which would
+fit in 100 MB, the reef smears into mush with both H.264 and AV1, while the
+jungle needs only about 4 Mb/s at the same quality. So the video is published
+as a release file and <code>.gitignore</code> keeps it out of git
+(<a href="publishing.html#why-the-video-isnt-in-git">the publishing page</a>
+explains why).
+</p>
+
+<p>
+<code>MC_CAP_SCALE</code> sets the internal resolution for the whole show, from 25 to 200%
+of the frame. The default, 200, renders every frame from 2160 lines, as the
+release renders Scene 1. The TAA resolves the larger frame and the present pass
+filters it down, which gives a sharper video. 100 renders about twice as fast,
+for a preview. <code>MC_CAP_DUR</code> records only the first so many seconds, and
+<code>BITRATE</code> (<code>10M</code>) sets the average bitrate. Make passes these from its command
+line on to the script, so you can write
+<code>make capture MC_CAP_DUR=10 MC_CAP_SCALE=100 VIDEO=start.mp4</code>.
+</p>
+</div>
+<div id="outline-container-the-stills-and-the-poster" class="outline-4">
+<h4 id="the-stills-and-the-poster"><span class="section-number-4">2.2.1.</span> The stills and the poster</h4>
+<div class="outline-text-4" id="text-the-stills-and-the-poster">
+<p>
+The twelve stills in <code>media/stills/</code> are frames of the published video, and
+<code>media/poster.jpg</code> is its title frame with a play button drawn over it. After
+a new recording, take them again so that the README matches the video. Each
+still is one frame, which ImageMagick scales to 960x540 and saves as a JPEG at
+quality 88. For the jellies, for example:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>ffmpeg -ss 105 -i media/hello-world-1080p60.mp4 -frames:v 1 build/frame.png
+magick build/frame.png -filter Lanczos -resize 960x540 -strip -quality 88 \
+    media/stills/05-jellies.jpg
+</code></pre>
+</div>
+
+<p>
+The frame goes under <code>build/</code>, which git ignores. These are the show times
+the stills are taken at. If a scene's timing changes, look at the new frame
+before you keep it.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Still</th>
+<th scope="col" class="org-left">Show time</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left"><code>01-bang.jpg</code></td>
+<td class="org-left">10.5 s</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>02-shapes.jpg</code></td>
+<td class="org-left">19 s</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>03-title.jpg</code></td>
+<td class="org-left">41 s</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>04-planet.jpg</code></td>
+<td class="org-left">55.5 s</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>05-jellies.jpg</code></td>
+<td class="org-left">105 s</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>06-predator.jpg</code></td>
+<td class="org-left">122 s</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>07-reef.jpg</code></td>
+<td class="org-left">150 s</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>08-canopy.jpg</code></td>
+<td class="org-left">178 s</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>09-ladybug.jpg</code></td>
+<td class="org-left">193 s</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>10-tyrannosaurus.jpg</code></td>
+<td class="org-left">221.5 s</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>11-beach.jpg</code></td>
+<td class="org-left">262.5 s</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>12-end-card.jpg</code></td>
+<td class="org-left">276.5 s</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+The poster is the 41 s frame again, at 1280x720. The play button is a
+translucent black disc 50 pixels in radius with a white triangle on it:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>ffmpeg -ss 41 -i media/hello-world-1080p60.mp4 -frames:v 1 build/frame.png
+magick build/frame.png -filter Lanczos -resize 1280x720 \
+    \( -size 1280x720 xc:none -fill 'rgba(0,0,0,0.55)' -draw 'circle 640,590 690,590' \
+       -fill 'rgba(255,255,255,0.92)' -draw 'polygon 623,565 623,615 667,590' \) \
+    -composite -strip -quality 88 media/poster.jpg
+</code></pre>
+</div>
+
+<hr />
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-the-size-flags-grouped" class="outline-2">
+<h2 id="the-size-flags-grouped"><span class="section-number-2">3.</span> The size flags, grouped</h2>
+<div class="outline-text-2" id="text-the-size-flags-grouped">
+<p>
+The release build uses <code>REL_FLAGS</code> (compile) and <code>REL_LDFLAGS</code> (link) from the
+<code>Makefile</code>.
+</p>
+
+<p>
+The measured gains from compiler flags, float rounding and function ordering
+below were established on the 64,365-byte version, before the current size
+reductions. They explain why those build steps exist; their individual gains
+are not additive predictions for the current payload.
+</p>
+</div>
+<div id="outline-container-codegen-rel-flags" class="outline-3">
+<h3 id="codegen-rel-flags"><span class="section-number-3">3.1.</span> Codegen (<code>REL_FLAGS</code>)</h3>
+<div class="outline-text-3" id="text-codegen-rel-flags">
+<pre class="example" id="org0c40193">
+-std=gnu11 -Oz -fno-inline-functions-called-once -fno-inline-small-functions
+-fno-caller-saves -mtune=k8 -mstringop-strategy=libcall -fno-ira-hoist-pressure -fno-if-conversion
+-fno-cse-follow-jumps -fno-shrink-wrap -fno-tree-sra -fno-tree-scev-cprop
+-fno-gcse-lm -fno-tree-coalesce-vars -fno-ipa-pure-const -fno-ipa-ra -fno-thread-jumps -fno-lra-remat -fno-jump-tables
+-fno-schedule-insns2 -fno-peephole2 -fno-optimize-sibling-calls
+-fno-tree-tail-merge -fno-move-loop-invariants -fno-tree-dse -fno-tree-pre
+-ffast-math -fno-exceptions -fno-plt -fno-stack-protector
+-fno-unwind-tables -fno-asynchronous-unwind-tables -fomit-frame-pointer
+-fcf-protection=none -Wa,-mx86-used-note=no
+-ffunction-sections -fdata-sections -fno-pic -fno-pie -fvisibility=hidden
+-flto -DMC_RELEASE -Iinclude -Ibuild/&lt;demo&gt;
+</pre>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Flag</th>
+<th scope="col" class="org-left">What it buys</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left"><code>-Oz</code></td>
+<td class="org-left">Optimise hardest for size (<code>-Os</code> plus size-over-speed choices like <code>push=/=pop</code> constants).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-fno-inline-functions-called-once</code> / <code>-fno-inline-small-functions</code></td>
+<td class="org-left">Keep helpers out of line. This saves about 1.3 KB of stream for about 15% more synth CPU (still under 2% of a core) and no measurable cost per frame.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-fno-caller-saves</code> to <code>-fno-jump-tables</code> (lines 2-4)</td>
+<td class="org-left">16 flags picked by a greedy search over about 240 single flags, each measured on the coded stream. Together they make the raw code bigger (<code>-fno-ipa-ra</code> alone adds about 6 KB), but it's code the packer's x86 models predict better, so the stream is about 1.7 KB smaller. Each pick leaves every verify frame in all three scenes identical and the whole soundtrack bit-identical. Four of them (<code>-fno-ipa-ra -fno-thread-jumps -fno-lra-remat -fno-jump-tables</code>) make the synth about 5% slower (6.0 s for the whole track instead of 5.7 s).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-fno-schedule-insns2</code> to <code>-fno-tree-pre</code> (lines 5-6)</td>
+<td class="org-left">Picked the same way, in a separate search: each makes the coded stream smaller, with identical rendering and bit-identical audio.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-flto</code></td>
+<td class="org-left">Link-time optimisation: inlining and dead-code elimination across translation units. It also lets hot math inline.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-ffast-math</code></td>
+<td class="org-left">Relaxed floating-point rules, for smaller and faster float code. The demo tolerates it.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-fno-exceptions</code></td>
+<td class="org-left">No C++ exception machinery. This is C, so the flag only states the intent.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-fno-plt</code></td>
+<td class="org-left">Call imports through the GOT directly, skipping PLT stubs.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-fno-stack-protector</code></td>
+<td class="org-left">Drops stack canaries and their setup code.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-fno-unwind-tables</code> / <code>-fno-asynchronous-unwind-tables</code></td>
+<td class="org-left">No <code>.eh_frame</code> or unwind data.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-fomit-frame-pointer</code></td>
+<td class="org-left">Frees a register and removes prologue/epilogue bytes.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-fcf-protection=none</code> / <code>-Wa,-mx86-used-note=no</code></td>
+<td class="org-left">No <code>endbr64</code> landing pads and no <code>.note.gnu.property</code> (CET / ISA-level notes).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-ffunction-sections</code> / <code>-fdata-sections</code></td>
+<td class="org-left">One section per function or datum, so the linker can drop unused ones.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-fno-pic -fno-pie</code></td>
+<td class="org-left">Non-position-independent code, which is smaller and has no GOT-relative indirection.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-fvisibility=hidden</code></td>
+<td class="org-left">Symbols are hidden by default, so there are fewer dynamic-symbol entries.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-DMC_RELEASE</code></td>
+<td class="org-left">Compiles out logging, asserts, GL error checks and PNG saving.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-Ibuild/&lt;demo&gt;</code></td>
+<td class="org-left">So that <code>main.c</code> can <code>#include "shaders_gen.h"</code> and <code>render.c</code> can include <code>mc_engine_shaders.h</code>, the baked, minified shader headers. Dev builds get a verbatim engine header from <code>build/&lt;demo&gt;/.dev/include</code> instead.</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+Some flags are left out because they change the output. <code>-fno-ipa-vrp</code>,
+<code>-fno-tree-forwprop</code> and <code>-fno-tree-loop-im</code> move pixels in Scenes 1-2.
+<code>-fno-ipa-modref</code> changes the audio by float noise (at most 1.8e-7, or
+-135 dBFS). <code>-frounding-math</code>, <code>-fno-tree-reassoc</code>, <code>-fsignaling-nans</code> and
+<code>-fsingle-precision-constant</code> change pixels or audio too. <code>-mavx</code> and
+<code>-march=x86-64-v3</code> make the stream bigger because of the VEX encodings, and
+every <code>-mtune</code> other than <code>k8</code> does worse than <code>k8</code>.
+</p>
+</div>
+</div>
+<div id="outline-container-linker-rel-ldflags" class="outline-3">
+<h3 id="linker-rel-ldflags"><span class="section-number-3">3.2.</span> Linker (<code>REL_LDFLAGS</code>)</h3>
+<div class="outline-text-3" id="text-linker-rel-ldflags">
+<pre class="example" id="orgcec8140">
+-no-pie -flto -flto-partition=one -Oz -fno-inline-functions-called-once -fno-inline-small-functions
+  (the codegen lines 2-6 of REL_FLAGS again: with LTO, code is generated at link time)
+-Wl,--gc-sections -Wl,--build-id=none
+-Wl,-z,norelro -Wl,-z,noseparate-code -Wl,--hash-style=sysv -s
+</pre>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Flag</th>
+<th scope="col" class="org-left">What it buys</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left"><code>--gc-sections</code></td>
+<td class="org-left">Garbage-collect unreferenced sections (pairs with <code>-ffunction/-fdata-sections</code>).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>--build-id=none</code></td>
+<td class="org-left">No build-id note.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-z norelro</code></td>
+<td class="org-left">No read-only-relocations segment (saves alignment padding and a program header).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-z noseparate-code</code></td>
+<td class="org-left">Don't pad code onto its own page, so the segments pack tighter.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>--hash-style=sysv</code></td>
+<td class="org-left">The smaller SysV symbol hash instead of GNU.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>-s</code></td>
+<td class="org-left">Strip the symbol table and debug info.</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+The link leaves out <code>-z nosectionheader</code> and keeps the section-header table,
+because <code>textrange.py</code> reads <code>.text</code>'s file range from it for the packer's x86
+coder. <code>elfshrink.py</code> then drops the table just as the flag would have, so the
+payload comes out byte-identical. The release link also runs twice, as
+described below.
+</p>
+</div>
+</div>
+<div id="outline-container-payload-only-payload-defs-payload-ldflags" class="outline-3">
+<h3 id="payload-only-payload-defs-payload-ldflags"><span class="section-number-3">3.3.</span> Payload only (<code>PAYLOAD_DEFS</code>, <code>PAYLOAD_LDFLAGS</code>)</h3>
+<div class="outline-text-3" id="text-payload-only-payload-defs-payload-ldflags">
+<p>
+Every payload compile gets <code>-DMC_IMPORT_HASH</code>, and the payload link gets
+<code>-nostartfiles -Wl,--no-as-needed</code> and <code>-B$(OUT)/.release/fpround/</code>, which
+points it at the assembler that rounds the float constants
+(<a href="#fpround-py-the-float-constants-rounded">below</a>). They're kept out of
+<code>REL_FLAGS</code> because <code>tools/verify.py</code> reuses that for its normally linked test
+programs.
+<a href="#keeping-libc-dropping-the-crt-and-the-import-table">The section on keeping libc</a>
+explains them.
+</p>
+</div>
+</div>
+<div id="outline-container-strip-compress-post-link" class="outline-3">
+<h3 id="strip-compress-post-link"><span class="section-number-3">3.4.</span> Strip &amp; compress (post-link)</h3>
+<div class="outline-text-3" id="text-strip-compress-post-link">
+<ul class="org-ul">
+<li>The float constants are rounded. With <code>-flto -flto-partition=one</code> the
+payload's code is generated at link time as one unit of assembly, and
+<code>fpround.py</code> rewrites that assembly on its way to the assembler. Each float
+and double constant in the pool whose uses are all floating-point is rounded
+to the coarsest value within 2^-16 of it, and the pool is laid out by bit
+pattern. That saves about 560 B of stream, and
+<a href="#fpround-py-the-float-constants-rounded">its section</a> has the details.</li>
+<li>The payload is linked twice. The first link writes a link map, which
+<code>funcorder.py</code> turns into a <code>--section-ordering-file</code> that lays the functions
+out by similarity, and the second link uses that file. Only the order of the
+code changes, but the packer's models prefer the new order by about 320 bytes
+of stream. <code>make</code> runs both links only when an object changed, so a no-op
+rebuild stays a no-op.</li>
+<li><code>textrange.py</code> records <code>.text</code>'s file range in <code>.release/payload.range</code> for
+the packer. Then <code>elfshrink.py</code> removes the section-header table and
+truncates the slack it leaves, keeping the program segments intact.
+<code>make dist</code> verifies a candidate before it replaces the retained payload.</li>
+<li><code>mkelf.sh</code> hands off to <code>pack.py</code>, which compresses the ELF with the
+context-mixing coder in <code>cm.h</code> and builds the freestanding launcher around the
+stream. The coder's x86 transform and instruction models only apply inside
+<code>--code-range</code>. The launcher decodes in RAM and runs the result through
+<code>memfd_create</code> and <code>execveat</code>. It's static and has no dependencies at all,
+not even libc, though the unpacked demo does need the graphics and audio
+libraries.</li>
+<li><p>
+The launcher has two stages, each built with its own flags instead of the
+release flags above. They are
+<code>-Oz -nostdlib -static -ffreestanding -fno-builtin -fno-tree-loop-distribute-patterns</code>
+(no libc, and no calls to <code>memset=/=memcpy</code> that the compiler would otherwise
+invent),
+<code>-fcf-protection=none -fno-asynchronous-unwind-tables -fno-unwind-tables</code>
+(no <code>endbr64</code>, no <code>.eh_frame</code>), <code>-malign-data=abi</code> and <code>--build-id=none</code>.
+</p>
+
+<p>
+The second stage is <code>tools/s2dec.S</code>, the payload decoder and the memfd glue,
+with the <code>cm.h</code> model written by hand. It's only assembled, then linked by
+<code>stage2.ld</code> to run at <code>S2_ADDR</code> (<code>0x800000</code>), and it ships coded for the
+first stage to decode. Because it's assembly, it's written directly for its
+coded size under the first stage's coder, and there's no C-flag search for
+it. The C decoder <code>mcstub.c</code> is the reference model and a fallback second
+stage (<code>-DMC_STAGE2</code>), linked the same way.
+</p>
+
+<p>
+<code>launcher.ld</code> links the first stage (<code>s1dec.S</code>) as a raw image
+(<code>--oformat=binary</code>) whose first bytes are its own ELF header. The image is
+one RWX <code>PT_LOAD</code> of the whole file. Its program header is folded into the
+ELF header's last 8 bytes, and the entry code sits in header fields the
+kernel never reads. Notes, comments and unwind data are discarded, and
+there's no page padding and no <code>PT_INTERP</code>, <code>PT_DYNAMIC</code> or <code>PT_NOTE</code>. The
+segment's memory size covers the first stage's tables, the second stage and
+its <code>.bss</code>, and a link-time <code>ASSERT</code> keeps the first stage below <code>S2_ADDR</code>.
+The self-extractor's section among the tools below has the details.
+</p></li>
+</ul>
+
+<hr />
+</div>
+</div>
+</div>
+<div id="outline-container-keeping-libc-dropping-the-crt-and-the-import-table" class="outline-2">
+<h2 id="keeping-libc-dropping-the-crt-and-the-import-table"><span class="section-number-2">4.</span> Keeping libc, dropping the CRT and the import table</h2>
+<div class="outline-text-2" id="text-keeping-libc-dropping-the-crt-and-the-import-table">
+<p>
+The payload still links libc, libm, libX11, libasound and libEGL dynamically.
+They're on every target and don't count against the budget. But the payload
+carries neither the C runtime's start files nor a single imported symbol.
+</p>
+
+<ul class="org-ul">
+<li>The payload has its own entry point: <code>src/mc_start.c</code> is <code>_start</code>. With
+<code>-nostartfiles</code> there's no <code>crt1</code>, <code>crti</code> or <code>crtbegin</code>, so there's no
+<code>__libc_start_main</code> import, no init/fini stubs, and no unwind tables or notes.
+The loader has already run libc's initialisers (<code>environ</code>, stdio, TLS,
+threads) by the time <code>_start</code> runs. <code>_start</code> aligns the stack, sets FTZ/DAZ
+(what <code>crtfastmath.o</code> does for <code>-ffast-math</code> in a normal link), resolves the
+imports, runs <code>main</code>, and leaves through the <code>exit_group</code> system call
+(<code>mc_exit</code>, which is also what <code>exit</code> means in the payload). It doesn't
+register the loader's finaliser, and no library's exit handler runs. So
+nothing tears the GL driver or the audio library down under the audio
+thread, and the kernel releases the window, the context and the sound
+device.</li>
+<li><p>
+Imports are found by hash. <code>include/microcosm/mc_imports.h</code> lists every
+library function the engine and demo call, as an X-macro with 55 entries. The
+ELF keeps <code>DT_NEEDED</code>, <code>PT_INTERP</code>, <code>DT_DEBUG</code> and <code>DT_SYMTAB</code> (glibc's loader
+crashes without it), but it has no <code>DT_VERNEED</code> and an empty <code>.dynsym</code>. So
+there are no names, no relocations and no <code>GLIBC_2.x</code> version requirements to
+tie the payload to the build machine's glibc. To check, use
+<code>readelf --use-dynamic -r</code>, which reads the dynamic section itself and lists
+no relocations. <code>readelf --dyn-syms</code> reads the section headers, which this
+ELF doesn't have, so it shows nothing either way.
+</p>
+
+<p>
+At startup the resolver walks <code>r_debug-&gt;r_map</code> and scans each object's
+dynamic symbols, taking their count from <code>DT_HASH</code> or <code>DT_GNU_HASH</code>. It keeps
+defined functions and objects whose default (non-hidden) version name matches
+the low 24 bits of a GNU name hash from <code>genimports.py</code>. GNU indirect
+functions (libm's <code>sinf</code> and friends) are called the way the loader would
+call them, and the vDSO is skipped because its <code>clock_gettime</code> reports errors
+differently. Every slot ends up equal to what <code>dlsym</code> returns. In payload
+compiles each listed name is an object-like macro onto the table, so a call
+costs one indirect <code>call</code>, the same as a <code>-fno-plt</code> GOT call. Include
+<code>mc_imports.h</code> after the system headers.
+</p></li>
+<li><p>
+The hashes are only as wide as they need to be. They're noise to the coder,
+so each byte stored costs about a byte of stream. The payload keeps only the
+low <code>MC_IMPORT_HASH_BITS</code> of each one (24 in <code>mc_imports.h</code>, so three bytes
+per import, back to back), and the resolver masks before comparing. The
+width can be changed, and the build guards it. <code>genimports.py</code> refuses a
+width at which two imports agree. <code>importcheck.py</code> refuses one at which an
+import agrees with any other name the resolver would accept from the
+libraries the payload maps on the build machine. Those are 10 libraries with
+7,600 names, which give 7 such pairs at 16 bits and none from 18 bits up.
+</p>
+
+<p>
+The build can't check another system's libraries. 55 imports against some
+7,600 names give 55 × 7,600 / 2²⁴ ≈ 0.025 expected chance agreements at 24
+bits. So a library set like this one has about a 2.5% chance of holding one.
+Only about half of those could bind the wrong function, because the resolver
+keeps the first match in load order, and a name in a library loaded after the
+real one never wins. Call it 1-3% of systems where the payload would call the
+wrong function. At 32 bits the same sum is 1 in 10,000. Widening the hashes
+is one line, <code>#define MC_IMPORT_HASH_BITS 32</code> in
+<code>include/microcosm/mc_imports.h</code>, which stores four bytes per import and
+costs about a byte of stream for each.
+</p></li>
+<li>Nothing is torn down. The payload never cleans up: when the show ends, or a
+start fails (it still exits 1), the process ends and the OS releases
+everything. Each cleanup is wrapped in <code>MC_TIDY(...)</code> (<code>mc.h</code>), which is
+<code>((void)0)</code> under <code>MC_IMPORT_HASH</code> and the full tidy-up in dev, check and
+headless builds. <code>mc_window_close</code>, <code>mc_audio_stop</code> and <code>mc_mesh_gpu_free</code>
+are declared only outside the payload build (<code>#ifndef MC_IMPORT_HASH</code>), so a
+call to one of them outside <code>MC_TIDY</code> fails to compile in the payload. The
+imports the teardown would need (<code>XCloseDisplay</code>, <code>XDestroyWindow</code>,
+<code>eglDestroyContext</code>, <code>eglDestroySurface</code>, <code>eglTerminate</code>, <code>pthread_join</code>,
+<code>pthread_mutex_destroy</code>, <code>snd_pcm_drop</code>) aren't in the list at all.</li>
+<li>Nothing is resolved that is never called. GL entry points that only the
+tools and the checks use sit in a second list, <code>MC_GL_TOOLS</code>, which the
+payload leaves out. Those are uniforms by name and the float and vec3
+setters, pixel read-back, the info logs, <code>glGetError</code>, renderbuffers, the
+non-instanced indexed draw and the teardown. The helpers built on them
+(<code>mc_uniform</code>, <code>mc_set_f</code>, <code>mc_set_v3</code>, <code>mc_window_read_pixels</code>,
+<code>mc_gl_context_release</code>) are compiled out of the payload too. So is
+<code>strcmp</code>, which only the tools' <code>mc_demo_shader</code> (<code>shaders_gen.h</code>) uses. A
+stray use in the payload fails to build instead of calling an empty slot,
+and an entry that nothing calls fails the link
+(<a href="#importcheck-py-the-payload-resolves-only-what-it-calls"><code>importcheck.py</code></a>).</li>
+<li>ALSA is opened with one call, <code>snd_pcm_set_params</code>. It does the work of
+<code>snd_pcm_hw_params_any</code>, six setters and <code>snd_pcm_hw_params</code>, and needs one
+import instead of nine. Its latency is given in µs, and through a resampling
+<code>plug</code> it fails with <code>EINVAL</code> unless the buffer comes out as a whole number of
+frames. <code>plug</code> over <code>dmix</code> at 48 kHz is ALSA's own default where no sound
+server runs. The latency is 100 ms (4,410 frames, periods of 1,102), which
+opens at all 16 rates tried (<code>plug</code> over the <code>null</code> device, 8-192 kHz). Four
+blocks' worth, 92,879 µs, isn't a whole number of frames and fails at 11 of
+them. The stream is left prepared and starts once the buffer is full.</li>
+<li>The libcalls are local. <code>memcpy</code>, <code>memmove</code>, <code>memset</code>, <code>memcmp</code>
+(<code>rep movsb=/=stosb</code>) and libgcc's <code>__powisf2</code> are defined in <code>mc_start.c</code>.
+That file is built without LTO, so they survive until code generation emits
+calls to them.</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-the-zero-gl-import-loader" class="outline-2">
+<h2 id="the-zero-gl-import-loader"><span class="section-number-2">5.</span> The zero-GL-import loader</h2>
+<div class="outline-text-2" id="text-the-zero-gl-import-loader">
+<p>
+Linking <code>libGL</code> would import dozens of GL functions by name, each with a
+dynamic symbol and a relocation. Instead, <code>src/gl_loader.c</code> fetches the 65
+entry points the payload calls through <code>eglGetProcAddress</code> into one table,
+<code>mcgl</code>, and the usual <code>gl*</code> names are macros onto it. The GL headers are
+included only for types and enum values, so the ELF references no GL symbol at
+link time. <a href="architecture.html#talking-to-the-gpu-without-linking-to-it">The architecture page</a>
+describes the table and its X-macro list. The only dynamic dependencies left
+are <code>libEGL</code>, <code>libX11</code>, <code>libm</code>, <code>libasound</code> and libc, and their functions are
+imported by hash (<a href="#keeping-libc-dropping-the-crt-and-the-import-table">above</a>).
+</p>
+
+<p>
+The loader keeps the names without their <code>gl</code> prefix, NUL-separated, in one
+blob of 873 bytes that codes to about 360 B of stream. GL isn't resolved by
+hash like the other imports, because that would need the GL library itself
+(<code>libOpenGL</code>) as a <code>DT_NEEDED</code> entry. The systems without GLVND, which
+<code>eglGetProcAddress</code> serves, couldn't run the demo then.
+</p>
+</div>
+</div>
+<div id="outline-container-why-opengl-and-not-vulkan-or-d3d12" class="outline-2">
+<h2 id="why-opengl-and-not-vulkan-or-d3d12"><span class="section-number-2">6.</span> Why OpenGL, and not Vulkan or D3D12</h2>
+<div class="outline-text-2" id="text-why-opengl-and-not-vulkan-or-d3d12">
+<p>
+On modern hardware the usual instinct is to reach for one of the newer APIs.
+MICROCOSM uses OpenGL because of the size limit.
+</p>
+
+<p>
+For a size-limited intro you want the driver to do as much of the work as
+possible, because its code doesn't count against your budget. Classic OpenGL
+suits that well. You ask for a context and a handful of entry points, and you
+have a fixed-function-ish pipeline, implicit state, automatic resource
+management and a GLSL compiler in the driver. That's millions of bytes of
+functionality for the cost of a few <code>eglGetProcAddress</code> calls.
+</p>
+
+<p>
+Vulkan and D3D12 are designed the other way round and expose the machinery. You
+build the pipeline state objects, descriptor layouts, render passes, memory
+allocators and synchronisation by hand, and you feed the GPU precompiled shader
+bytecode (SPIR-V or DXIL) from a separate toolchain. That's the right trade for
+a AAA engine, but here it means pages of boilerplate and a bytecode blob, all of
+it in your own binary. The demoscene has argued about this: allowing extra DX12
+helper libraries in a 64k category was contentious for this reason.
+</p>
+
+<p>
+So MICROCOSM targets OpenGL 4.5 core. That's still the old API where the driver
+carries the weight, but it has what a modern renderer relies on. Compute shaders
+and storage buffers let every animal be sculpted and meshed on the GPU at load.
+They also let Scene 2's seabed be made and placed there, with its sand and its
+boulder left in a buffer that the frames' vertex shaders read. Only a triangle
+count or the placed props are read back. With <code>layout(binding = N)</code> on samplers
+and blocks in GLSL, no C code has to assign texture units. Sampler objects let
+one depth texture be read both compared (hardware PCF) and raw. The TAA uses
+texture gathers, and image load/store and direct state
+access are there for any pass that wants them, though none uses them. Every
+shader says <code>#version 450 core</code>, and GLSL 4.x allows the implicit int-to-float
+conversions that the minifier exploits. Each new entry point costs its name in
+the loader's list, about 13 bytes or 5-6 bytes of stream. The 4.5 floor leaves
+out drivers stuck at 3.3, but Mesa's <code>llvmpipe</code> provides 4.5, so the headless
+checks still run on any machine. Size was the main reason for the choice and
+portability a side benefit: the same code should run on any driver with 4.5.
+It has been tested on Mesa, with Intel's driver and llvmpipe.
+</p>
+
+<hr />
+</div>
+</div>
+<div id="outline-container-the-tools" class="outline-2">
+<h2 id="the-tools"><span class="section-number-2">7.</span> The tools</h2>
+<div class="outline-text-2" id="text-the-tools">
+<p>
+All the Python tools use only the standard library (Python 3.8+), and all of
+them are deterministic. Several have a <code>--selftest</code>, which the project's checks
+rely on.
+</p>
+</div>
+<div id="outline-container-make-targets-and-variables" class="outline-3">
+<h3 id="make-targets-and-variables"><span class="section-number-3">7.1.</span> Make targets and variables</h3>
+<div class="outline-text-3" id="text-make-targets-and-variables">
+<p>
+The Makefile runs every tool below. A target that works on one demo takes it
+from <code>DEMO</code>, and <code>make &lt;demo&gt;</code> sets that for you.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Target</th>
+<th scope="col" class="org-left">What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left"><code>make all</code>, or just <code>make</code></td>
+<td class="org-left">Build every demo under <code>demos/</code> that has a <code>main.c</code>, running <code>dev</code> and <code>dist</code> for each.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make &lt;demo&gt;</code></td>
+<td class="org-left">Build one demo's two binaries (<code>make hello-world</code>). It runs make again with <code>DEMO=&lt;demo&gt; dev dist</code>.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make dev</code></td>
+<td class="org-left">Build only the dev binary, <code>build/&lt;demo&gt;/&lt;demo&gt;-dev.bin</code>.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make dist</code></td>
+<td class="org-left">Build only the packed release, <code>build/&lt;demo&gt;/&lt;demo&gt;.bin</code>, with the payload's link checks and the pack.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make capture</code></td>
+<td class="org-left">Build <code>build/&lt;demo&gt;/&lt;demo&gt;-capture</code> and record the release video with <a href="#capture-sh-the-release-video"><code>capture.sh</code></a>. Needs ffmpeg with libx264.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make shaders</code></td>
+<td class="org-left">Only bake the shader headers, <code>build/&lt;demo&gt;/shaders_gen.h</code> and <code>mc_engine_shaders.h</code>.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make shader-report</code></td>
+<td class="org-left">Run <code>dist</code>, then list what each shader and each shared-text entry costs in the packed file (<code>shadercost.py</code>).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make code-report</code></td>
+<td class="org-left">Run <code>dist</code>, then do the same for each function, named array and source file (<code>codecost.py</code>).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>make clean</code></td>
+<td class="org-left">Delete <code>build/</code>. Videos in <code>media/</code> stay.</td>
+</tr>
+</tbody>
+</table>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Variable</th>
+<th scope="col" class="org-left">Default</th>
+<th scope="col" class="org-left">What it sets</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left"><code>DEMO</code></td>
+<td class="org-left"><code>hello-world</code></td>
+<td class="org-left">The demo that <code>dev</code>, <code>dist</code>, <code>capture</code>, <code>shaders</code> and the two reports work on.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>PACK</code></td>
+<td class="org-left"><code>full</code></td>
+<td class="org-left"><code>full</code> searches for the coder's best configuration. <code>quick</code> packs with <code>DEFAULT</code>, or with a cached search result for the same payload. Anything else is an error.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>FPROUND</code></td>
+<td class="org-left"><code>1</code></td>
+<td class="org-left"><code>0</code> links the payload with its float constants as written (<a href="#fpround-py-the-float-constants-rounded"><code>fpround.py</code></a>).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>IMPORTCHECK</code></td>
+<td class="org-left"><code>error</code> for <code>hello-world</code>, <code>warn</code> for any other demo</td>
+<td class="org-left">Whether a GL entry point or import that nothing calls fails the payload's link or is only listed (<a href="#importcheck-py-the-payload-resolves-only-what-it-calls"><code>importcheck.py</code></a>).</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>CC</code></td>
+<td class="org-left"><code>cc</code>, make's own default</td>
+<td class="org-left">The C compiler, for the demo and for the packer's host-side tools.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>PYTHON</code></td>
+<td class="org-left"><code>python3</code></td>
+<td class="org-left">The interpreter that runs the Python tools.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>NM</code></td>
+<td class="org-left"><code>nm</code></td>
+<td class="org-left">The <code>nm</code> that <code>pack.py</code> runs to read the second stage's end address. Set it to match <code>CC</code> when that's a cross compiler.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>VIDEO</code></td>
+<td class="org-left"><code>media/&lt;demo&gt;-1080p60.mp4</code></td>
+<td class="org-left">Where <code>make capture</code> writes the video.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>MC_CAP_DUR</code></td>
+<td class="org-left">the whole show</td>
+<td class="org-left">Record only this many seconds from the start, for a quick test.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>MC_CAP_SCALE</code></td>
+<td class="org-left"><code>200</code></td>
+<td class="org-left">The capture's internal resolution, from 25 to 200%. At 200 each 1080p frame is rendered from 2160 lines, and 100 is about twice as fast, for a preview.</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>BITRATE</code></td>
+<td class="org-left"><code>10M</code></td>
+<td class="org-left">The video's average bitrate.</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+Put them on make's command line (<code>make dist PACK=quick</code>,
+<code>make capture MC_CAP_DUR=10</code>), or in the environment. Make hands command-line
+variables on to its recipes' environment, which is how <code>NM</code> reaches <code>pack.py</code>
+and the capture's variables reach <code>capture.sh</code> and the capture binary.
+</p>
+</div>
+</div>
+<div id="outline-container-glslmin-py-safe-glsl-minifier" class="outline-3">
+<h3 id="glslmin-py-safe-glsl-minifier"><span class="section-number-3">7.2.</span> <code>glslmin.py</code>: a safe GLSL minifier</h3>
+<div class="outline-text-3" id="text-glslmin-py-safe-glsl-minifier">
+<p>
+It shrinks GLSL so that it compresses better. It must not change behaviour or
+break any identifier that the host C code looks up by name: uniforms, block
+names, and attributes or outputs bound by name.
+</p>
+
+<pre class="example" id="orgb9e5e7e">
+python3 glslmin.py [options] INPUT.glsl [-o OUTPUT.glsl]
+python3 glslmin.py --rename [options] A.vert B.frag ... --outdir DIR
+  -o, --output     output file (stdout if omitted); INPUT may be "-" for stdin
+  --outdir DIR     write each input to DIR/&lt;its file name&gt;
+  --stats          print original vs minified byte counts to stderr
+  --rename         one rename mapping across all inputs, declaration folding,
+                   integral literals as ints
+  --protect A,B    extra identifiers --rename must never touch
+  --map FILE       write the --rename mapping (original new)
+  --int-arith      with --rename, also integral literals inside * / + -
+  --selftest       run the built-in test suite and exit
+</pre>
+
+<p>
+A few transforms are always on, and all of them are safe. It strips
+comments and cuts whitespace down to what keeps neighbouring tokens from
+fusing. It decides that by re-tokenizing each pair, with explicit guards so
+that <code>/=+=/</code> never forms <code>//</code> and so on. It also shortens float literals
+(<code>1.0</code> to <code>1.</code>, <code>0.5</code> to <code>.5</code>, <code>1.0e3</code> to <code>1.e3</code>) but leaves exponents and
+integers alone. Preprocessor directives stay one per line.
+</p>
+
+<p>
+<code>--rename</code> minifies a whole set of shaders together, and <code>genshaders.py</code> always
+runs it over the demo's and the engine's shaders in one go. It's plain
+alpha-renaming: each old name gets a different new one, and no new name
+collides with a name that stays. So it can't change behaviour as long as
+nothing outside the GLSL knows the old names.
+</p>
+
+<ul class="org-ul">
+<li>These keep their names: uniforms without <code>layout(location)</code> or
+<code>layout(binding)</code>, every interface-block name, vertex inputs and fragment
+outputs without <code>layout(location)</code>, <code>--protect</code> names, built-ins, keywords,
+reserved words, <code>gl_*</code>, swizzles, <code>#version=/=#extension</code> lines, <code>#=/=##</code>
+macros, and anything a shader uses without declaring it. The tool fails
+closed, so a built-in it doesn't know is never renamed.</li>
+<li>These are renamed: functions, parameters, locals, globals, <code>const=s, struct
+  types and their members, members of uniform blocks, block instances,
+  =#define</code> names, varyings (the same way in both stages), and uniforms that
+have a <code>layout(location)</code> or <code>layout(binding)</code>. Located and bound uniforms
+are safe to rename because the C side sets them by number. The demo gives a
+location to every uniform it sets and a binding to every sampler that isn't
+on unit 0. std140 blocks are filled by offset, so never query a member by
+name.</li>
+<li>One mapping covers every file. A file-scope name gets the same short name in
+every file. A function's parameters and locals are numbered in order of first
+use inside that function, and local <i>k</i> has the same name in every function,
+so a helper copied between files stays byte-identical for the coder. Each
+kind of name has a family of its own: a first letter for the kind, then a
+running character in the order <code>x y z w a..v X..W A..V 0..9 _</code>. The swizzle
+letters come first because the coder already sees them everywhere. Locals
+are <code>Vx Vy Vz Vw Va</code> &hellip; in order, functions <code>Ux Uy</code> &hellip;, members <code>Tx Ty</code>
+&hellip;, and the rest of the file-scope names (globals, varyings, uniforms,
+struct types, macros) <code>Sx Sy</code> and so on. Within each family the most used
+names come first. So the first letter of a name says what kind of name it
+is, and a function's <i>k</i>-th local is spelled the same everywhere. The coder's
+word and statement contexts pick up on both. The family letters are capitals
+the text hardly uses otherwise, since those code best.</li>
+<li>Declarations are folded. Consecutive declarations with the same qualifiers
+and type become one list (<code>uniform float a;uniform float b;</code> becomes
+<code>uniform float a,b;</code>). It never folds in struct or block bodies, across
+directives, on <code>layout()</code> or array-typed prefixes, or onto a declaration
+that is an unbraced <code>if</code> body.</li>
+<li>Integral literals are written as ints. <code>2.</code> becomes <code>2</code> wherever GLSL's
+implicit int-to-float conversion gives back the same float and the same
+arithmetic. That covers a whole constructor argument (<code>vec3(0.,1.,0.)</code>
+becomes <code>vec3(0,1,0)</code>) and the whole right-hand side of a float initializer
+or assignment. It also covers an operand of <code>&lt; &gt; &lt;</code> &gt;= <code>= !=</code> whose partner
+sub-expression is float-family, one branch of a float <code>?:</code>, and float-only
+parameters. Those
+are <code>smoothstep</code>, <code>step</code>, <code>mix</code>'s third, <code>mod</code>'s second, <code>textureLod</code>'s lod,
+<code>clamp</code>, <code>min</code> and <code>max</code> after a float first argument, <code>pow</code> with a scalar
+float base, and a float parameter of a user function that's defined once.
+Operand types come from the declarations, per function scope. Anything it
+can't type keeps its dot, and it never converts both operands of one
+operator. Nor does it apply in <code>return</code>, because Mesa converts no return
+value. Inside <code>* / + -</code> it only applies with <code>--int-arith</code>. The value is
+still exact there, but Mesa then fuses <code>a*2.+b</code> and <code>a*2+b</code> into different
+multiply-adds and a few pixels move by a rounding step, so the build leaves
+it off.</li>
+<li>Casts are dropped the same way. An explicit <code>float(X)</code> of an int expression
+<code>X</code> goes wherever its int would convert to the same float (<code>a*float(i)</code>
+becomes <code>a*i</code>, <code>vec2(float(i+1),0)</code> becomes <code>vec2(i+1,0)</code>). That includes
+arithmetic, since the compiler converts <code>X</code> at the same point either way:
+it's the literals that get folded early and change the fusing. <code>X</code> only
+counts as int if it's built from int literals, int and <code>ivec</code> component
+names, <code>int(...)</code> and the integer operators. Its brackets go when it's one
+operand, or a whole argument or initializer.</li>
+<li>Uncalled functions go first. Before the renaming counts uses, every function
+that a shader never calls from <code>main</code> is dropped, so dead helpers don't skew
+the naming. genshaders' own dead-function pass still runs afterwards.</li>
+<li>Swizzles use one alphabet: <code>.rgb</code> becomes <code>.xyz</code> and <code>.a</code> becomes <code>.w</code>,
+unless some struct member is spelled like a swizzle.</li>
+<li>Functions are overloaded by argument count. They share a name as long as
+the name is nothing else anywhere and no shader has two of them with the
+same argument count. The int-literal
+pass picks a user function's signature by its argument count, and
+genshaders' dead-function pass counts a call only for the definition with
+that count. Functions with equal counts never share a name, since telling
+them apart by argument types would let dead helpers survive.</li>
+<li>Locals that are read once are inlined. A local that's read exactly once is
+folded into its read when nothing could tell the difference. The types must
+match (an expression typer works them out from the declarations), and the
+read must come later in the same block, in a plain statement, a
+declaration, a <code>return</code> or an <code>if</code> condition. Nothing it reads may be
+written in between, it can't have side effects, and no derivative may be
+carried past a <code>return</code> or <code>discard</code>. The driver is the harder part. Mesa
+rewrites expression trees before it builds SSA, so a moved expression can
+compile to different code, and each shape that did is excluded. The folded
+expression never holds <code>?:</code>, <code>&amp;&amp;</code> or <code>||</code>. It takes a swizzle, an index, a
+unary operator or a divisor only as a single token, and it joins a <code>* / %</code>
+chain only as a product, call or name without <code>/</code> or <code>%</code>.</li>
+<li>Brackets the parse doesn't need are dropped.</li>
+<li>Source it can't follow (unbalanced brackets, anonymous or function-local
+structs, an unrecognised <code>NAME {</code>) raises an error instead of guessing.</li>
+</ul>
+
+<p>
+None of these transforms should change any picture. The rules for literals and
+inlining leave out the expression shapes that make Mesa compile different
+code. Shader literals are never rounded the way <code>fpround.py</code> rounds the code's
+constants. Unlike in the C code, a shader's pixels move with its literals, and
+a hash's constants, once rounded, draw a different pattern altogether.
+</p>
+
+<p>
+<code>--selftest</code> runs the built-in suite, which covers cross-file consistency,
+varyings, uniform/block protection, located and bound uniforms, swizzles,
+macros, members, shadowing, fail-closed cases and folding. It passes on this
+tree. <code>tools/verify.py</code> links every raw and every minified program pair with
+<code>glslangValidator</code>.
+</p>
+</div>
+</div>
+<div id="outline-container-genshaders-py-bake-shaders-into-headers" class="outline-3">
+<h3 id="genshaders-py-bake-shaders-into-headers"><span class="section-number-3">7.3.</span> <code>genshaders.py</code>: bake shaders into headers</h3>
+<div class="outline-text-3" id="text-genshaders-py-bake-shaders-into-headers">
+<p>
+It minifies every <code>*.vert=/=*.frag=/=*.comp=/=*.glsl</code> in the demo directory,
+and with <code>--engine</code> the ones in the engine's <code>src/shaders</code> too, all in one
+<code>glslmin</code> run with one rename mapping. Then it drops every function a shader
+never calls, since the shared blocks bring in helpers that a given stage
+doesn't use. Before that it drops each <code>#define</code> that nothing expands, so that
+a fragment-only helper reached only through such a macro goes too. Scene 3's
+<code>s3light</code> is one, and without this its shadow chain would stay in every vertex
+shader. Text that several of the demo's shaders share is stored once (see
+below), and the output is a C header that defines the following.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>static const char mc_shader_dict[];          // the shared text, NUL-separated
+static const char mc_shader_blob[];          // every shader, NUL-separated, with references into it
+static const char *mc_shader_at(int i);      // shader i, spelled out in full
+static const unsigned char mc_program_shaders[][2];   // per program: (vs, fs) indices
+static inline const char *mc_demo_shader(const char *name);   // by file name, for the tools
+</code></pre>
+</div>
+
+<p>
+The minified demo shaders are cut into top-level pieces, each a run of
+declarations or a function. A run of pieces that recurs in several shaders,
+such as the jungle's common block or a helper copied between files, is kept
+once in <code>mc_shader_dict</code>. The blob holds one byte in its place, <code>0x80</code> plus
+the entry's index, and an entry may itself refer to earlier ones. Runs are
+chosen greedily by what they save. The packer's match model already makes a
+repeat cheap, so the selection prices a repeated byte at 0.04 B of coded
+stream, against about 1 B for a reference. Only long, frequent runs qualify,
+up to 128 of them. <code>mc_shader_at</code> spells the whole blob
+out into a <code>.bss</code> buffer on first use (<code>mc_shader_spell</code>, recursive), so what
+GL compiles is byte-identical to the unshared text. <code>--emit-dir</code> and the
+shader checks see the unshared text.
+</p>
+
+<p>
+In <code>MC_RELEASE</code> builds the demo <code>#include=s this header instead of reading
+files, and builds program /i/ from =mc_program_shaders[i]</code>, in <code>programs.def</code>
+order (<code>genshaders.py</code> reads that file and the manifests it includes). So the
+payload has no file names and no <code>strcmp</code> chain. A compute program is listed
+with the same file for both its stages
+(<code>MC_PROGRAM(jr_mesh, "jr.comp", "jr.comp")</code>), and <code>mc_shader_make</code> compiles a
+compute shader when it's handed the same source twice.
+</p>
+
+<p>
+The blob holds the vertex and compute shaders first, then the fragment
+shaders, each group largest first, because the coder did best on that order.
+The engine's post-pass shaders go at the end of the same blob and use the same
+dictionary. The engine header (<code>--engine-output</code>) names each one after its
+file (<code>post.vert</code> gives <code>POST_VS</code>, <code>bright.frag</code> gives <code>BRIGHT_FS</code>). Under
+<code>MC_RELEASE</code> each name is <code>mc_shader_at(k)</code>, and otherwise it's a plain
+minified string for the tools' checks. <code>render.c</code> includes that header in
+every build. Dev builds get a version with the sources as written (<code>--raw</code>,
+under <code>build/&lt;demo&gt;/.dev/include</code>), so a dev compile error points at readable
+GLSL.
+</p>
+
+<pre class="example" id="org43b617d">
+python3 tools/genshaders.py demos/hello-world/shaders -o build/hello-world/shaders_gen.h \
+    --engine src/shaders --engine-output build/hello-world/mc_engine_shaders.h
+# --emit-dir DIR also writes every minified shader (verify.py links those),
+# --map FILE the rename mapping, --no-rename skips renaming.
+</pre>
+
+<p>
+<code>make</code> runs it. Its stamp covers both shader directories and the demo's <code>.def</code>
+manifests, whose order the program table follows, so reordering or
+repointing an <code>MC_PROGRAM</code> remakes the header and the objects that include it.
+A minification failure stops the build and leaves the previous headers in
+place. <code>--allow-raw</code> makes it fall back to the raw sources instead, which is
+meant for diagnostics and is off by default. If the output hasn't changed, the
+header's modification time stays as it was.
+</p>
+</div>
+</div>
+<div id="outline-container-shadercost-py-what-each-shader-costs-in-the-64k" class="outline-3">
+<h3 id="shadercost-py-what-each-shader-costs-in-the-64k"><span class="section-number-3">7.4.</span> <code>shadercost.py</code>: what each shader costs in the 64k</h3>
+<div class="outline-text-3" id="text-shadercost-py-what-each-shader-costs-in-the-64k">
+<p>
+It replays the packer's model (<code>cm.h</code>, in the configuration the last pack
+chose, read from <code>pack.json</code>) over the release payload bit by bit, and adds up
+the coded bits that land on each shader's text in the blob and on each entry
+of the shared dictionary. A shader's cost depends on everything before it,
+because the model has seen every earlier byte, so the figure is what that
+shader actually adds to the packed file. Shader text is about half the stream:
+28.9 KB of the 59.2 KB in this build.
+</p>
+
+<pre class="example" id="org98efe55">
+python3 tools/shadercost.py [BUILD_DIR] [--save FILE] [--against FILE]
+make shader-report              # the same, on the current build
+</pre>
+
+<p>
+<code>--save</code> writes <code>name&lt;TAB&gt;bytes</code> for every shader and entry. <code>--against</code>
+compares with such a file and shows the changes per shader, largest first, and
+in total. The sums are the model's ideal code length, and the real stream adds
+a byte or two of coder overhead.
+</p>
+</div>
+</div>
+<div id="outline-container-codecost-py-what-each-function-costs-in-the-64k" class="outline-3">
+<h3 id="codecost-py-what-each-function-costs-in-the-64k"><span class="section-number-3">7.5.</span> <code>codecost.py</code>: what each function costs in the 64k</h3>
+<div class="outline-text-3" id="text-codecost-py-what-each-function-costs-in-the-64k">
+<p>
+This is <code>shadercost.py</code>'s replay applied to the code, with the coded bits
+summed per function and per named array instead of per shader. The payload is
+compiled with <code>-ffunction-sections -fdata-sections</code>, so the map of its second
+link (kept as <code>.release/payload.map</code>) gives every function and every named
+array an input section of its own, which maps to its bytes in <code>payload.elf</code>.
+LTO's <code>.isra</code> and <code>.constprop</code> clones appear under their own names. Whatever
+no name covers is summed in groups: the compiler's float constant pool
+(<code>.rodata.cst4/8/16</code>), string literals, unnamed <code>.rodata</code> (switch tables),
+alignment padding, and the ELF headers, dynamic tables and gaps. Each name is
+then traced to the source file that defines it, among those the payload's
+objects were compiled from, to give totals per file. That goes through the
+objects' <code>-MMD</code> files, because LTO's single partition hides where a function
+came from. <code>scene3.c</code> and the <code>s3_*.c</code> packages count as themselves, not as
+the <code>main.c</code> that includes them.
+</p>
+
+<pre class="example" id="orgf87d7f8">
+python3 tools/codecost.py [BUILD_DIR] [--top N] [--save FILE] [--against FILE]
+make code-report                # the same, on the current build
+</pre>
+
+<p>
+In this build, of the 59.2 KB stream, the shader text and the code that spells
+it out (<code>shaders_gen.h</code>) take 29.1 KB, <code>main.c</code> 12.4 KB, <code>synth.c</code> 4.5 KB,
+<code>scene3.c</code> 2.5 KB and <code>render.c</code> 1.8 KB. The most expensive functions are
+<code>render_scene2</code> (9,502 bytes of code, 2,451 packed), <code>mc_synth_render</code> (1,653)
+and <code>uw_prepare</code> (1,199). The compiler's float constant pool is 2,348 bytes,
+which code to about 999. That's 3.4 bits a byte after rounding and sorting
+(<code>fpround.py</code>, below), and still more than code costs. The import hashes next
+to it don't compress at all (<code>mc_imp_hash</code>: 166 bytes, 176 packed).
+</p>
+
+<p>
+<code>--top</code> sets how many functions and arrays to list (40, or 0 for all). <code>--save</code>
+writes <code>name&lt;TAB&gt;bytes&lt;TAB&gt;file</code> for every row, and <code>--against</code> compares with
+such a file, per row and per source file. A static defined in two of the
+payload's sources would show up as <code>? (2 files)</code>, and there are none. A name
+it can't trace at all shows as <code>?</code>, such as the 8-byte <code>bypass.0</code>, a static
+local inside a function.
+</p>
+</div>
+</div>
+<div id="outline-container-genimports-py-hash-the-payload-import-list" class="outline-3">
+<h3 id="genimports-py-hash-the-payload-import-list"><span class="section-number-3">7.6.</span> <code>genimports.py</code>: hash the payload's import list</h3>
+<div class="outline-text-3" id="text-genimports-py-hash-the-payload-import-list">
+<p>
+It reads the <code>MC_IMPORTS(X)</code> list and <code>MC_IMPORT_HASH_BITS</code> from
+<code>include/microcosm/mc_imports.h</code>, and writes <code>#define MC_IMPORT_HASH_BYTES</code> and
+<code>#define MC_IMPORT_HASHES</code> for <code>src/mc_start.c</code>. Each hash is the low
+<code>MC_IMPORT_HASH_BITS</code> of the entry's GNU name hash, stored little-endian in as
+few whole bytes as that needs, and the hashes go back to back in list order.
+It fails on a duplicate name, or if two hashes are equal at that width.
+Collisions with the other names that the libraries export are left to
+<code>importcheck.py</code>, after the link.
+</p>
+
+<pre class="example" id="orgf87ecc5">
+python3 tools/genimports.py include/microcosm/mc_imports.h -o build/hello-world/mc_imports_gen.h
+</pre>
+</div>
+</div>
+<div id="outline-container-importcheck-py-the-payload-resolves-only-what-it-calls" class="outline-3">
+<h3 id="importcheck-py-the-payload-resolves-only-what-it-calls"><span class="section-number-3">7.7.</span> <code>importcheck.py</code>: the payload resolves only what it calls</h3>
+<div class="outline-text-3" id="text-importcheck-py-the-payload-resolves-only-what-it-calls">
+<p>
+It runs in the payload's link rule, on the second link and its <code>-Map</code> file,
+before <code>elfshrink.py</code> drops the section headers. It walks the code with the
+packer's own x86 decoder (<code>cm_xfield</code> from <code>cm.h</code>, compiled on the fly) and
+collects every RIP-relative operand, since that's how GCC reaches a member of
+a global table. Then it checks that at least one instruction reads each slot
+of <code>mcgl</code> (<code>MC_GL_FUNCS</code>) and of <code>mc_imp</code> (<code>MC_IMPORTS</code>). The loaders' own
+indexed stores don't count, and neither does a <code>lea</code>. An entry that nothing
+calls still costs its name or hash in the packed file, so the link fails and
+names it.
+</p>
+
+<pre class="example" id="org0575701">
+importcheck: the payload resolves these at startup but never calls them:
+  GL entry points (mc_gl.h, MC_GL_FUNCS): DeleteShader
+  imports (mc_imports.h, MC_IMPORTS): strcmp
+move a GL entry point into MC_GL_TOOLS(X) and drop an import's X() and #define, or build with IMPORTCHECK=warn
+</pre>
+
+<p>
+Next it asks the payload's own dynamic loader (its <code>PT_INTERP</code>, run with
+<code>--list</code>) which libraries the payload maps: the <code>DT_NEEDED</code> ones and their own
+dependencies, 10 here. It reads their dynamic symbols the way the resolver
+will (defined functions, indirect functions and objects, default versions),
+and fails if any import's hash, truncated to <code>MC_IMPORT_HASH_BITS</code>, equals the
+hash of another of those names. On this machine, at 16 bits it would list
+seven, <code>getenv</code> against <code>rintl</code> among them. A collision always fails the link.
+On success it prints one line:
+</p>
+
+<pre class="example" id="orga6752ae">
+importcheck: 65 GL entry points and 55 imports, every one called; no 24-bit import hash shared with another of the 7,600 names 10 libraries export
+</pre>
+
+<p>
+The lists belong to the engine but the check is per payload, so unused
+entries only fail the link for <code>hello-world</code>. Any other demo may use less of
+the engine than the reference one, so <code>IMPORTCHECK</code> defaults to <code>warn</code> there
+and its unused entries are only listed. <code>IMPORTCHECK=error</code> makes it strict,
+and <code>make hello-world IMPORTCHECK=warn</code> relaxes it for the reference demo. Both
+checks take under half a second, and the walk agrees with <code>objdump -d</code> on all
+2,470 of the payload's RIP-relative operands. The second link's map stays next
+to the payload as <code>payload.map</code>, which <code>codecost.py</code> reads.
+</p>
+
+<pre class="example" id="org2c49f63">
+python3 tools/importcheck.py build/hello-world/.release/payload.elf.tmp build/hello-world/.release/payload.elf.map
+</pre>
+</div>
+</div>
+<div id="outline-container-elfshrink-py-drop-the-section-header-table" class="outline-3">
+<h3 id="elfshrink-py-drop-the-section-header-table"><span class="section-number-3">7.8.</span> <code>elfshrink.py</code>: drop the section-header table</h3>
+<div class="outline-text-3" id="text-elfshrink-py-drop-the-section-header-table">
+<p>
+A pure-Python ELF64 post-processor that does what <code>sstrip</code> does. After
+checking that the input is a 64-bit little-endian x86-64 ELF, it zeroes the
+<code>e_sh*</code> header fields and cuts off the trailing bytes the section-header table
+held, leaving every program segment and the program-header table intact. It
+refuses if the cut would take bytes that are needed, for example when the
+section headers aren't at the end.
+</p>
+
+<pre class="example" id="org37201c4">
+python3 elfshrink.py INPUT -o OUTPUT [--verify] [--golf]
+</pre>
+
+<p>
+The payload's link rule runs it with <code>--verify</code>, which parses the output again
+and confirms every segment still fits. It also passes <code>--golf</code>, which blanks
+what the loaders never need in a fixed-address executable that imports nothing
+by name. One is the <code>PT_PHDR</code> entry, since the kernel passes <code>AT_PHDR</code> anyway
+and the load bias it gives <code>ld.so</code> is 0 for <code>ET_EXEC</code>. The other is the empty
+dynamic symbol table's hash table: <code>DT_HASH</code> and <code>DT_SYMENT</code>, along with the
+table's bytes. <code>ld.so</code> skips a map that has no hash buckets. <code>DT_SYMTAB</code>
+stays, because glibc's <code>ld.so</code> crashes at startup without it. The blanked
+bytes become zeros, which cost the packer next to nothing, and no offset moves.
+<code>--golf</code> silently skips anything that doesn't look like that payload. In the
+64,365-byte version, before the current size reductions, this took the payload
+from 249,856 to 248,968 bytes. <code>pack.py</code> checks its
+input with the same parser.
+</p>
+</div>
+</div>
+<div id="outline-container-textrange-py-the-code-file-range-for-the-packer" class="outline-3">
+<h3 id="textrange-py-the-code-file-range-for-the-packer"><span class="section-number-3">7.9.</span> <code>textrange.py</code>: the code's file range, for the packer</h3>
+<div class="outline-text-3" id="text-textrange-py-the-code-file-range-for-the-packer">
+<p>
+It reads a freshly linked ELF64's section headers and prints the file range of
+its <code>.text</code> section, in the form <code>0x214 0x17dd3</code>. The Makefile runs it on the
+payload just before <code>elfshrink.py</code> drops those headers, which doesn't move any
+file offsets. The range goes to <code>pack.py --code-range</code>, so that the coder
+applies its x86 transform and instruction models only to real code.
+</p>
+
+<pre class="example" id="orgde78268">
+python3 tools/textrange.py build/hello-world/.release/payload.elf.tmp
+</pre>
+</div>
+</div>
+<div id="outline-container-funcorder-py-lay-the-functions-out-for-the-packer" class="outline-3">
+<h3 id="funcorder-py-lay-the-functions-out-for-the-packer"><span class="section-number-3">7.10.</span> <code>funcorder.py</code>: lay the functions out for the packer</h3>
+<div class="outline-text-3" id="text-funcorder-py-lay-the-functions-out-for-the-packer">
+<p>
+It reads a first link of the payload and its <code>-Map</code> file, and prints a linker
+<code>--section-ordering-file</code> for the second link. Each function's bytes become a
+set of 4-byte grams, and the functions are chained greedily, starting from the
+largest. Each step takes the unplaced function that shares the most grams with
+the last one, scaled by the square root of the union so that big functions
+don't swallow everything. Ties go to the first name in sorted order, so the
+output depends only on the inputs. Related code ends up side by side, where
+the coder's context and match models find it, and the code itself doesn't
+change. On this payload, coded with the shipped configuration, the function
+order takes 321 B off the stream against the linker's own order.
+</p>
+
+<p>
+The same file lists <code>.rodata</code>'s input sections in the first link's order,
+except that the shader text (<code>mc_shader_blob</code>, then <code>mc_shader_dict</code>) moves to
+the end. The binary tables then follow the code that reads them, and the text
+runs to the end of the section, blob before dictionary, which codes better than
+the other way round. That takes another 63 B off this payload's stream.
+</p>
+
+<pre class="example" id="org895ca17">
+python3 tools/funcorder.py FIRST_LINK.elf FIRST_LINK.map &gt; payload.order
+</pre>
+</div>
+</div>
+<div id="outline-container-fpround-py-the-float-constants-rounded" class="outline-3">
+<h3 id="fpround-py-the-float-constants-rounded"><span class="section-number-3">7.11.</span> <code>fpround.py</code>: the float constants, rounded</h3>
+<div class="outline-text-3" id="text-fpround-py-the-float-constants-rounded">
+<p>
+The C code's float and double literals, and every constant GCC folds from them
+(the bar lengths that <code>BAR_S</code> makes, <code>1.0f / 12.0f</code> and so on), live in an
+anonymous pool: the <code>.LC</code> labels in <code>.rodata.cst4/8/16</code>. In the 64,365-byte
+version, before the current size reductions, that was 557 entries of 4 and
+8 bytes (511 floats and 46 doubles) and two 16-byte masks. The detailed
+before/after counts in this section refer to that version.
+Most of them carry the noisy mantissa of a decimal literal (<code>0.35f</code> is
+<code>0x3eb33333</code>). <code>fpround.py</code> rounds each one to the coarsest value within 2^-16
+of it (|error| &lt;= 2^-16 |x|), which zeroes at least the low byte of a float
+and 37 bits of a double. Then it lays the 4- and 8-byte entries out in
+ascending order of their bit patterns.
+</p>
+
+<pre class="example" id="org23a9bd0">
+python3 tools/fpround.py [--rel N] [--double N] [--tight ROOTS:N] [--no-sort] IN.s -o OUT.s [--report FILE]
+python3 tools/fpround.py --install-as DIR [--off] [POLICY] [--report FILE]    # DIR/as, for gcc -BDIR/
+python3 tools/fpround.py --selftest
+</pre>
+
+<ul class="org-ul">
+<li>It works at the link. The payload links with <code>-flto -flto-partition=one</code>,
+so all its code is generated there, as one LTRANS unit of assembly that
+holds the whole pool. That includes the folded constants, which a pass over
+the C literals would miss. <code>-B$(OUT)/.release/fpround/</code> on the payload link
+makes gcc assemble that unit with <code>.release/fpround/as</code>, a two-line script
+that <code>--install-as</code> writes. The script is only rewritten when its text
+changes, so it doubles as the step's stamp, and a new <code>FPROUND_POLICY</code>
+relinks. The script rewrites the <code>.s</code> it's handed into a temporary file and
+runs the real assembler on that. Both links go through it, and
+<code>funcorder.py</code>, <code>textrange.py</code> and <code>elfshrink.py</code> see its output like any
+other. The link itself is still GCC's own. <code>FPROUND=0</code> writes an <code>as</code> that
+only runs the real one, and the payload is then byte-identical to one linked
+without the step. <code>.release/fpround.txt</code> lists every pool constant, what
+became of it and which functions use it.</li>
+<li>It only rounds a constant if every use of it is floating-point. A use counts
+if it's an SSE scalar float or double instruction (arithmetic, a compare, a
+conversion) or an x87 one. So does a load into a register whose value meets
+nothing but those, register copies, stores of its own width, call arguments
+in <code>xmm0</code>-<code>7</code> and the return value. The value is followed through the
+function's branches until something overwrites it. GCC gives each pool entry
+one mode, so 8 bytes loaded into <code>%rax</code> and stored away are the same double
+that a <code>mulsd</code> reads elsewhere. An entry that nothing reads as a float stays
+as it is. A bitwise use (the <code>andps</code> / <code>xorps</code> abs and sign masks) pins the
+constant as written. So do an integer use, a taken address, a packed access,
+a width other than the entry's and any instruction the tool doesn't know.
+NaN, infinities, zero and denormals are never rounded either. Five
+constants stay as written here: the two masks, and three doubles that are
+only ever copied (125.0, -1e9, and the synth's step length in samples, so
+that the tempo stays exact). GCC sometimes shares a pool entry: with
+<code>.set .LC9,.LC141</code>, the float -2.0 is the low half of the double near
+19.35. Each side then gets its own copy when either one changes.</li>
+<li>The bound of 2^-16 limits every consequence without having to know what a
+constant means. The timeline's constants turn up in nearly every per-frame
+function. <code>S3_REX</code> is 27 bars, for instance, and the blob counts its hops in
+beats as <code>j / JO_BEAT</code>, which is folded to <code>j * 2.0667</code>. At 2^-16 none of
+them moves by more than 2 ms in Scene 3's 114 s, or 4.3 ms over the show's
+278.7 s, and a beat rate moves by under 0.01 beat over the show. In the
+synth, <code>midi_hz</code>'s 1/12 moves by 7.6e-6 (under 0.03 cents three octaves
+from A4), and the sample period 1/44100 by 4.65e-6, which raises every voice
+by 0.008 cents. A coarser bound packs smaller, but moves the timeline by tens
+of milliseconds.</li>
+<li>The sort only changes the entries' addresses inside <code>.rodata.cst4</code> and
+<code>.cst8</code>, and the code's references follow their labels. In order of bit
+pattern, neighbours share sign, exponent and top mantissa bits, which the
+coder's sparse contexts predict. Rounding also lets the link fold together
+constants that became equal, and here the pool comes out 36 bytes shorter.</li>
+<li>On the 64,365-byte version's payload, before the current size reductions,
+coded with that version's shipped configuration, rounding and sorting
+take the stream from 61,588 to 61,026 B. 346 of the 511 floats and 36 of the
+43 doubles it may round change, and the rest are already exact (1.0, 0.25,
+440.0 and so on).</li>
+<li><p>
+<code>--selftest</code>, which verify runs, covers the bounds, the classification,
+pinning, sharing and the order. In that same comparison, linked with the
+same function order, the build without the step has the same 20,052 instructions. 2,194 of them
+differ only in a RIP-relative displacement, and 159 in an address in <code>.data</code>
+or <code>.bss</code>, which move with the shorter pool. Each of the 1,927 pool
+references reads the same bytes or a value within 2^-16 (the worst is
+1.526e-5).
+</p>
+
+<p>
+In the pictures, the camera paths, the predator's path and the trees of
+Scenes 2 and 3 move by sub-pixel amounts. Scene 1's collision sim is
+chaotic, so it plays out a little differently. In the sound, the oscillators' phases drift
+with the sample period, and a bird call is a random draw against a float
+level, so the calls can come at other steps. The notes and drums land on
+the same samples, because the step length is exact.
+</p></li>
+<li>It leaves the named tables alone (<code>S3_KEYS</code>, <code>S3_ROAM_KEYS</code>, <code>PALETTE</code>, the
+synth's envelopes and others, about 200 more noisy floats), because they
+need their C types, which the assembly doesn't carry. A dozen float
+immediates in the code stay as they are too. <code>tools/verify.py</code>, the headless
+build and the capture build link without the step, so they render with the
+constants as written.</li>
+<li>The timeline stays in the code. The scenes' envelopes (about 100
+<code>mc_smoothstepf</code> calls and the lerps on literal times) could be data, the
+way <code>synth.c</code>'s <code>RAMPS</code> are. But the pool, sorted and rounded, already is a
+table of the distinct times, and its RIP-relative loads are the references.
+An index, an immediate or a table read costs what those loads do, plus the
+code that evaluates it.</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-mkelf-sh-pack-py-cm-h-s2dec-s-mcstub-c-s1dec-s-the-elf-self-extractor" class="outline-3">
+<h3 id="mkelf-sh-pack-py-cm-h-s2dec-s-mcstub-c-s1dec-s-the-elf-self-extractor"><span class="section-number-3">7.12.</span> <code>mkelf.sh</code> / <code>pack.py</code> + <code>cm.h</code> + <code>s2dec.S</code> + <code>mcstub.c</code> + <code>s1dec.S</code>: the ELF self-extractor</h3>
+<div class="outline-text-3" id="text-mkelf-sh-pack-py-cm-h-s2dec-s-mcstub-c-s1dec-s-the-elf-self-extractor">
+<p>
+<code>mkelf.sh</code> turns the release ELF into the shipped <code>.bin</code>, which is itself an
+ELF, not a shell script. The payload is compressed with MICROCOSM's own
+context-mixing coder and embedded in a small freestanding launcher, which
+decodes it in RAM and runs it from an anonymous in-memory file
+(<code>memfd_create</code> and <code>execveat</code>). The launcher needs no libc, shell, external
+decompressor or temporary file, and it writes nothing to disk. Its decoder
+(<code>s2dec.S</code>, the <code>cm.h</code> model in hand-written assembly, with <code>mcstub.c</code> as its
+C twin) is itself stored coded, behind a first stage written in assembly
+(<code>s1dec.S</code>).
+</p>
+
+<pre class="example" id="org3be5c86">
+tools/mkelf.sh INPUT.elf OUTPUT.bin [--budget 65536] [--quick]
+  [--cache-dir DIR] [--manifest FILE] [--code-range FILE]
+</pre>
+
+<ul class="org-ul">
+<li><code>cm.h</code> holds the whole coder, both the model and the binary arithmetic
+coder. It's compiled into the host-side compressor (<code>cmpack.c</code>) and into the
+launcher's decoder, so the two can't diverge. It uses integers only (squash
+and stretch are built at start-up from an integer recurrence), so every host
+reproduces the launcher's predictions bit for bit.</li>
+<li>About 41% of the payload is x86-64 code (99,049 of its 241,936 bytes), so
+the coder reads it as instructions. A small table-driven length decoder (<code>cm_xfield</code>) walks
+the code range given by <code>--code-range</code>. It knows prefixes, REX, the one-,
+two- and three-byte opcode maps, ModRM/SIB, displacements and immediates.
+Before coding, <code>cm_x86t</code> rewrites every rel32 call or jump target and every
+RIP-relative disp32 as an absolute address, so that every call to one
+function and every load of one float constant look the same. Conditional
+jumps keep their relative targets, because those code better as they are.
+The decoder undoes the rewrite after decoding. The walk only reads prefixes,
+opcodes and ModRM/SIB, never a field it rewrites, so it sees the same
+instructions before and after. <code>tools/checks/cmx86.c</code> tests the transform on
+edge cases (fields straddling the end of the range, truncated instructions,
+runs of prefixes) and on 200,000 fuzzed buffers.</li>
+<li><p>
+The model is in the style of lpaq. Each bit is predicted by hashed context
+models and a match model. There's one context model per <i>byte mask</i> over the
+last 8 bytes, which covers the low dense orders and the sparse contexts that
+suit x86. There are up to four extra models: a word model, the last byte
+with its place in a 4-byte column, and two indirect models. Those look at
+what followed the last byte, and what followed the last two, the last time
+they were seen. And there are seven models keyed on the instruction being
+decoded:
+</p>
+<ul class="org-ul">
+<li>which field the byte is;</li>
+<li>field, byte index and opcode;</li>
+<li>the instruction so far, with the opcodes before it;</li>
+<li>field, byte index and the last byte, alone and with the previous
+instruction;</li>
+<li>the instruction so far, with the last instruction of its opcode;</li>
+<li>one that switches by field. A displacement or immediate byte reads the
+last two RIP-relative or call targets, with the field and byte index.
+These are absolute after the transform, so a run of loads from one table,
+or of calls to one function, predicts the next. A ModRM byte reads the
+opcode with the previous instruction's opcode and ModRM. Any other byte
+reads the instruction so far with the previous opcode.</li>
+</ul>
+
+<p>
+Past the code range, in the GLSL and the tables, the x86 models would have
+nothing to see, so they model the shape of the GLSL instead. At each byte
+the coder tracks the bracket depth, and for each depth the word before the
+bracket (the function called) and the commas since (the argument). It also
+tracks the brace depth and each statement's first word. Two contexts use the
+call and argument, alone and with the last byte, and one the statement's
+first word with the depth and the last byte. Others take both depths with
+the last byte, order 3 with the depth, and the classes of the last 16 bytes.
+The final one takes the first words of this statement and of the one before
+(the last one that had a first word), with the word so far and the brace
+depth. The depths only start over at a NUL, which comes before the text and
+between shaders: brackets balance, so nothing else needs to reset them.
+</p>
+
+<p>
+Each context slot is a 16-bit counter: a 12-bit probability and a 4-bit
+adaptation count, which counts up to the configured limit. Updates round to
+nearest. With truncation a counter could reach 0 but would stop 14/4096 short
+of 1, a bias the mixer would have to undo. The slots are grouped per nibble,
+16 to a 32-byte block, in one shared table of 2^26 slots (128 MiB), and slot
+0 of each block is a check. A context takes its own block or the
+neighbouring one, whichever already holds it, or else clears the less used
+of the two. That way colliding contexts don't pollute each other's
+statistics.
+</p>
+
+<p>
+The match model looks up the last 8 bytes, and only follows what it finds if
+the two agree on at least <code>CM_MM</code> bytes. The search picks that length, 13 in
+this build. A long minimum helps most in the GLSL, where short matches
+mislead.
+</p>
+
+<p>
+Five neural mixers combine the predictions in the logistic domain. The first
+selects its weights by match length, the x86 field (outside the code, the
+last byte's class) and the bits of the byte so far. Each of the other four
+selects by one of the last four bytes and the bit's position. An optional
+sixth (<code>CM_NM</code> 6, which this build uses) selects by the x86 opcode, and
+outside the code by the classes of the last three bytes and by whether the
+statement's first word is known and a bracket is open. The four leave out
+the bits of the byte so far, since with them each weight set would see too
+few bits to learn from. The first mixer keeps them, because without them the
+stream gets longer.
+</p>
+
+<p>
+A second-layer mixer combines their outputs. Its weights are chosen by the
+bits of the byte so far and the x86 field or, outside the code, the last
+byte's class. Two APMs refine the result, and a 32-bit carry-less arithmetic
+coder codes the bit.
+</p></li>
+<li>Two adaptive probability maps follow the second-layer mixer (<code>CM_APM</code>,
+<code>CM_AR</code>). One is keyed on the bits of the current byte so far (order 0), the
+other on those and the last whole byte (order 1). Each has 33 buckets spaced
+128 apart in the stretch domain, interpolated around the mixer's output and
+refined toward <code>p = (p + a₀ + 2·a₁) / 4</code>. Both buckets around the point
+learn the bit. There's also a warm-up (<code>CM_WARM</code>): over the first
+2^CM_WARM bytes the first-layer mixers learn four times as fast, and then
+twice as fast up to four times that, because the weights are far from
+settled there. Both add to the decoder, so pack.py only keeps them when they
+win on the whole file (see the search below). This build keeps the APMs and
+a short warm-up (<code>CM_WARM</code> 1): four times the learning rate for the first
+two bytes and twice the rate through the first eight.</li>
+<li>The configuration is fixed at compile time, so the launcher only carries
+what it uses, and it's chosen by a search at build time. The search covers
+the mask set (up to 24), the extra models, the counter limit, both mixer
+learning rates, the mixer count and their initial weights, the match model's
+shortest match, the APMs and the warm-up. <code>PACK=full</code> hill-climbs over it.
+Each step compiles <code>cmpack.c</code> for 8 neighbouring configurations at once,
+each with one knob or mask changed, and moves to the best one that shrinks
+the stream. It stops when a whole neighbourhood fails or 200 candidates are
+spent. The climb starts from <code>DEFAULT</code> in <code>pack.py</code>, the result of a long
+search on a recent payload with the current model. From an older <code>DEFAULT</code>
+the climb ends in a weaker optimum, so <code>DEFAULT</code> should be refreshed
+whenever the model changes. Candidate order and batch size are fixed, so the
+result depends only on the payload, its code range and the tools, and it's
+cached by their hash. This build's pack tried 203 configurations in all.
+<code>PACK=quick</code> uses <code>DEFAULT</code>, or a cached search result for the same payload.
+The winner and the code range go into <code>payload_meta.h</code> for the launcher. The
+stream goes in after the first stage's code with <code>.incbin</code>, so there's no
+array padding or terminator, and its length is a link-time constant.</li>
+<li>The search minimises the stream, but what has to fit is the whole file.
+Most knobs cost the decoder nothing, so their best value for the stream is
+also the best for the file. A few change the decoder's own size, because the
+launcher compiles in only what it uses: the APMs, the warm-up, the
+extra-model set (<code>CM_XSET</code>) and the sixth mixer. For those the smallest
+stream need not give the smallest file, so after the stream search pack.py
+settles them against the total. It builds the launcher for the search winner
+and for its neighbours in just those knobs, and keeps the smallest
+<code>stream + launcher</code>. Building the launcher for every search candidate would
+be far too slow, but doing it for this handful at the end is cheap and
+deterministic. This is also where the APM stage has to earn its place: it's
+kept only when what it takes off the stream outweighs what it adds to the
+decoder.</li>
+<li><p>
+The launcher has two stages. The second is <code>tools/s2dec.S</code>: the <code>cm.h</code>
+decoder and four raw system calls (<code>memfd_create</code>, <code>write</code>, <code>execveat</code> with
+<code>AT_EMPTY_PATH</code>, <code>exit</code>), written by hand, with each step matching one line
+of the C model. Its entry point <code>s2_main</code> comes first, and <code>stage2.ld</code> links
+it to run at <code>S2_ADDR</code> (<code>0x800000</code>). Without a first stage the file would
+have to carry this x86 raw, and it's the biggest single thing in the file,
+so it's coded. What counts is then its size after the first stage's coder,
+and the asm is written for that rather than for raw bytes.
+</p>
+
+<p>
+<code>mcstub.c</code> is the same decoder in C. With <code>-DMC_DECODE_TEST</code> it's the
+reference model that the pack checks against, and with <code>-DMC_STAGE2</code> it's a
+reference or fallback second stage, linked by <code>stage2.ld</code> the same way as
+the asm. The build doesn't ship it. Once the first stage has coded them, the
+-Oz C and the asm aren't far apart, because the first stage's coder already
+compresses the decoder's repetition. So the asm wins by dropping the C's ABI
+overhead and register spills, not by being much smaller.
+</p>
+
+<p>
+The asm also ignores the ABI where nothing needs it. Only <code>cm_xfield</code>, which
+<code>UP</code> and <code>X86T</code> call with live registers, saves the callee-saved registers.
+The driver loops until the model holds all <i>n</i> bytes (<code>cm_pos</code>, which the
+model counts anyway) instead of counting bits in a register, and <code>CTX</code> and
+<code>INIT</code> end in a tail jump. <code>cm_in8</code> shifts the byte it reads straight into
+the coder's state, which starts from <code>.bss</code> zeros as <code>cm.h</code>'s initialisers
+say. The forms are chosen by their coded size. The first stage's coder
+prefers regular code, so <code>rep stosl</code> and memory-operand forms of the same
+steps would code bigger.
+</p>
+
+<p>
+The file carries the second stage coded by a much smaller coder
+(<code>tools/s1.h</code>). Each of its models is a hashed pair of counts, of zeros and
+of ones, over a byte mask of the last four bytes, and the other count halves
+on every surprise. The prediction is the weighted share of ones, with weight
+2^w, doubled while a context has only seen one value. That takes one
+division and no logistic tables. A 32-bit carry-less binary arithmetic coder
+with 16-bit probabilities does the coding. <code>s1pack.c</code> picks the models
+(masks and log2 weights) with a deterministic greedy walk from a fixed
+start, and <code>PACK=quick</code> keeps the start. Every search comparison charges
+the compressed second-stage stream plus five bytes for each model: its
+four-byte mask and one-byte weight. Adding or removing a model must improve
+that total, so a shorter stream cannot win by adding more metadata than it
+saves. The reported stream length still excludes those model tables.
+</p>
+
+<p>
+The first stage, <code>s1dec.S</code>, is that decoder written by hand (317 bytes, each
+step one line of the C reference), plus the ELF header. <code>launcher.ld</code> links a
+raw image whose first 112 bytes are the ELF header, with the program header
+folded into its tail. The bytes of <code>e_phnum</code> and <code>e_shentsize</code> double as
+<code>p_type</code> (<code>PT_LOAD</code>), and those of <code>e_shnum</code> and <code>e_shstrndx</code> as <code>p_flags</code>
+(RWX). The segment sizes come from linker symbols. All of the entry code
+sits in three parts of the header that Linux never reads: <code>e_shoff</code>,
+<code>e_flags</code> and <code>e_ehsize</code>, then <code>p_paddr</code>, then the padding of <code>e_ident</code>, and
+it runs through them in that order. The entry decodes stage 2 into place and
+jumps there with the initial stack and the payload. The ABI promises a
+16-byte aligned stack at entry, so the stack needs no realigning. Stage 2
+has the payload's coded length as a constant of its own, <code>MC_BLOB_LEN</code> in
+<code>payload_meta.h</code>.
+</p>
+
+<p>
+A stronger first-stage coder doesn't pay for its own decoder. So the file is
+the 112-byte header, the first stage's 317 bytes of code, five bytes per
+selected model, the coded second stage and the stream. The current whole
+launcher and stream sizes are listed under <a href="#the-real-numbers">The real numbers</a>.
+</p>
+
+<p>
+The decoder's tables live in <code>.bss</code>, so they cost no file bytes. With this
+build's configuration the second stage's <code>.bss</code> comes to about 152 MiB
+(159 MB). The context slots take 128 MiB of it, the match model's hash
+table 16 MiB, the two APMs 4.1 MiB, and the mixers' weights 3.3 MiB (32,512
+sets of 27 weights). The last 0.6 MB holds the decoded payload, the indirect
+models' tables and the smaller ones. The first stage adds 2 MiB of count
+pairs, and all of it is released when <code>execveat</code> replaces the process. The
+configuration has 15 masks, three extra models, seven instruction or text
+contexts and six mixers. Decoding the payload takes under two seconds on the
+UHD 620 laptop, and <code>pack.json</code> records the time the pack measured.
+</p></li>
+<li><p>
+Before shipping, <code>pack.py</code> compiles two decoders for the host: the
+reference model (<code>mcstub.c</code> with <code>-DMC_DECODE_TEST</code>, built from the same
+<code>cm.h</code> the packer compressed with) and the shipped decoder itself (the asm,
+<code>s2dec.S</code> with <code>-DMC_S2_TEST</code>). It times the asm, and byte-compares what each
+one decodes against the original ELF. So a wrong model, configuration or
+code range fails the build, not the compo, and the asm and the model can't
+disagree. The first stage gets the same treatment: <code>s1dec.S</code>, linked into a
+host test (<code>-DMC_S1_TEST</code>), must reproduce stage 2 byte for byte. pack.py
+also checks that the launcher is an x86-64 ELF64 with a single RWX <code>PT_LOAD</code>
+that covers the whole file, with the entry point inside it, and that it fits
+the 64 KB budget.
+</p>
+
+<p>
+<code>tools/checks/tooling.py</code> packs and launches a real program with its code
+range, so the x86 path is exercised, and runs the transform self-test.
+Through <code>tools/checks/s2equiv.py</code> it also checks that the asm decoder
+reproduces every input and agrees with the <code>cm.h</code> model, over 40 cases that
+cross four configurations with five inputs. The inputs are a real ELF, text,
+GLSL-shaped text (with brackets, commas, braces, statements, NULs and an
+unbalanced tail), random data and a tiny input, each with and without a code
+range.
+</p>
+
+<p>
+The work happens in a temporary sibling directory, and only a candidate that
+passes is renamed over the published binary. A failure keeps the previous
+binary, if there is one, and prints compiler, ELF, decode and size
+diagnostics. <code>pack.json</code> records the stream and launcher bytes, the
+configuration, the code range, the search size and the host decode time.
+</p></li>
+<li>The build-time tools are <code>python3</code> and the C compiler that builds the demo,
+and neither ships.</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-capture-sh-the-release-video" class="outline-3">
+<h3 id="capture-sh-the-release-video"><span class="section-number-3">7.13.</span> <code>capture.sh</code>: the release video</h3>
+<div class="outline-text-3" id="text-capture-sh-the-release-video">
+<p>
+It records the show as the release video: 1920x1080 at 60 fps with its
+soundtrack, every frame rendered offline by the demo's capture build. Nothing
+is shown or played. <code>make capture</code> builds that binary and runs the script.
+</p>
+
+<pre class="example" id="orga4e6db0">
+tools/capture.sh CAPTURE-BIN VIDEO WORKDIR
+# make capture: build/&lt;demo&gt;/&lt;demo&gt;-capture, media/&lt;demo&gt;-1080p60.mp4, build/&lt;demo&gt;/capture
+</pre>
+
+<p>
+There are two steps, so the slow render runs only once. First the capture
+binary runs with <code>MC_CAP_AUDIO</code> to write the soundtrack. Then it runs again
+and streams raw frames into x264 at CRF 8, which makes a near-lossless master
+in <code>WORKDIR</code>, about 2.5 GB for the whole show. Then the master is encoded in two passes, at <code>BITRATE</code> on
+average with peaks held to 40 Mb/s, using <code>-tune film</code> and <code>aq-mode=3</code>. The
+soundtrack goes in as AAC at 256 kb/s, and the picture is converted to BT.709
+and tagged as such. For the whole show the video comes to about 357 MB.
+</p>
+
+<p>
+A finished master is used again if the binary, <code>MC_CAP_SCALE</code> and
+<code>MC_CAP_DUR</code> are the same, so a failed encode doesn't render everything again.
+<code>WORKDIR</code> is deleted once the video is written, and it needs about 3 GB free
+until then. On the UHD 620 the published version's master, 16,722 frames, took
+57 minutes to render, before final encoding. <a href="#recording-the-video">Recording the video</a> has the capture
+binary and the steps by hand.
+</p>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

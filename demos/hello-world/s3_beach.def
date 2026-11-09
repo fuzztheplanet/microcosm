@@ -1,0 +1,2 @@
+/* scene 3, the beach and the sea: MC_PROGRAM(field, vs, fs) per program */
+MC_PROGRAM(jw_sea, "jw_sea.vert", "jw_sea.frag")

@@ -1,0 +1,332 @@
+#+TITLE: Publishing on GitHub
+#+SUBTITLE: The first push, later commits, and releases
+#+SETUPFILE: setup.org
+#+OPTIONS: toc:2
+
+[[file:index.org][↑ Back to the index]]
+
+This page is for whoever publishes the repository. It covers the first push to
+GitHub, the commits after that, and releases. Everything that git can do is
+done with plain =git= commands. The rest, creating the repository and
+attaching files to a release, is done on the GitHub website, because git has
+no notion of either.
+
+Releases matter more here than in most projects. The 64k file and the video of
+the demo are both kept out of git, so a release is the only place people can
+download them. The poster at the top of the README also links to the video in
+the latest release, and that link stays broken until the first release exists.
+
+* Before you start
+:PROPERTIES:
+:CUSTOM_ID: before-you-start
+:END:
+
+You need git 2.28 or newer (for =git init -b=) and a GitHub account that git
+can push to. The commands below use the SSH address, so add your SSH key to
+your GitHub account first. If you'd rather use HTTPS, use the
+=https://github.com/...= address instead, and give git a personal access token
+when it asks for a password.
+
+Build the demo and run the checks first, so you know what you're publishing:
+
+#+begin_src sh
+make hello-world
+python3 tools/verify.py
+#+end_src
+
+The 64k file is =build/hello-world/hello-world.bin=. Its size and hash are in
+=build/hello-world/.release/pack.json=.
+
+The video is =media/hello-world-1080p60.mp4=. It isn't in git, so a fresh clone
+doesn't have it. =make capture= makes it:
+
+#+begin_src sh
+make capture      # writes media/hello-world-1080p60.mp4
+#+end_src
+
+It renders the whole show offline, with no window and no sound, and it needs
+=ffmpeg= with =libx264=. The published video was rendered with Mesa on a
+laptop's Intel UHD 620 integrated graphics: 3840x2160 internally, downsampled
+to 1920x1080 at a playback rate of 60 fps. Its render alone took 57 minutes,
+followed by two encoding passes. That's an offline render, not a real-time
+benchmark. The stills under =media/= are frames of the same video, so make
+them again whenever you record a new one (see
+[[file:pipeline.org::#the-stills-and-the-poster][the pipeline doc]]). The
+capture also needs about 3 GB free under =build/= for the near-lossless
+master it encodes from. The
+master is deleted once the video is written. If a run stops after the render,
+the next one starts from the master. The recipe and its settings are in
+[[file:pipeline.org::#recording-the-video][the pipeline doc]].
+
+* What goes into git
+:PROPERTIES:
+:CUSTOM_ID: what-goes-into-git
+:END:
+
+=.gitignore= keeps out =build/= (everything =make= writes, the =.bin=
+included), every =.mp4=, and stray =.o=, =.bin= and =.elf= files anywhere
+in the tree. Everything else goes in, the exported HTML under =docs/= too, so
+people can read the docs without Emacs and GitHub Pages can serve them (see
+[[#the-docs-on-github-pages][The docs on GitHub Pages]]). That's a few
+megabytes in all, most of it the HTML and the JPEG stills under =media/=.
+
+=.gitattributes= stores text files with LF line endings. The Makefiles and the
+shell scripts need them, so leave it in place.
+
+* The first push
+:PROPERTIES:
+:CUSTOM_ID: the-first-push
+:END:
+
+Create an empty repository on GitHub first: click the + at the top right of
+any GitHub page, then New repository. Don't let GitHub add a README, a licence
+or a =.gitignore=, because the project has its own. Then, from the top of the
+project:
+
+#+begin_src sh
+git init -b main
+git add -A
+git status --short        # nothing under build/, no .mp4
+git commit -m "MICROCOSM and the Hello World demo"
+git remote add origin git@github.com:YOUR-NAME/microcosm.git
+git push -u origin main
+#+end_src
+
+Look over the list that =git status= prints before you commit. If anything
+from =build/= or a video shows up, something is wrong with =.gitignore=, and
+GitHub will refuse the push anyway (it rejects files over 100 MB). If git asks
+who you are, set =git config user.name= and =git config user.email= and commit
+again.
+
+The push starts the build workflow (=.github/workflows/build.yml=). It builds
+the demo on Arch Linux and fails if the packed file is over 65,536 bytes. Then
+it runs the regression checks, rendering on the CPU. If both pass, it keeps the
+=.bin= and its =pack.json= as an artifact of the run. It takes a while. You can
+follow it on the repository's Actions tab.
+
+* Reading a failed run
+:PROPERTIES:
+:CUSTOM_ID: reading-a-failed-run
+:END:
+
+A failed run has a red cross on the Actions tab. Open it, then the
+=hello-world= job. The job lists its steps, marks the one that failed and opens
+its log. The steps after it are skipped, the artifact upload too, so a failed
+run has no =.bin= to download.
+
+If the packed file came out over budget, the failed step is Build (debug build
+and the packed 64k). Near the end of its log, just before make's own =Error=
+lines, is this line from =tools/pack.py=:
+
+#+begin_example
+pack failed: 65612 bytes exceeds 65536-byte budget; no candidate published (any previous output is unchanged)
+#+end_example
+
+The first number is the packed size. A build that fits prints its size in the
+next step, Size, for example =hello-world.bin: 63,237 / 65,536 bytes, 2,299 free=.
+
+If the step that failed is Regression checks (software rendering),
+=tools/verify.py= has stopped at the first check that failed. The log shows
+that check's own output, then a Python traceback that ends in
+=CalledProcessError= and names the command. The checks never look at the
+packed size. They build their own test programs from the sources and render
+with Mesa's =llvmpipe=. The =Evidence:= directory that =verify.py= names at the
+start stays inside the runner and isn't kept.
+
+* The docs on GitHub Pages
+:PROPERTIES:
+:CUSTOM_ID: the-docs-on-github-pages
+:END:
+
+GitHub shows the =.org= pages itself, but its Org renderer drops the section
+part of a link to another page, so such a link opens that page at the top. The
+exported HTML doesn't have this problem, and GitHub Pages can serve it from
+=docs/=. The README and [[file:index.org][the index]] point readers to that
+copy, at =https://fuzztheplanet.github.io/microcosm/=.
+
+Pages is switched on once, on the website, after the first push:
+
+1. Open the repository's Settings, then Pages in the list on the left.
+2. Under Build and deployment, set Source to Deploy from a branch.
+3. Under Branch, pick =main= and the =/docs= folder, then click Save.
+
+A minute or two later the Pages settings show the site's address, and
+=index.html= is its front page. From then on every push to =main= publishes
+the HTML in =docs/= again. So export it with =make -C docs html= before you
+commit a change to an =.org= page, or the site falls behind. The empty
+=docs/.nojekyll= file makes Pages serve the files as they are, without running
+them through Jekyll first.
+
+The address comes from the account and the repository's name. If the project
+lives somewhere else, search the README and =docs/*.org= for
+=fuzztheplanet= and change those links, then export the HTML again.
+
+* Later commits
+:PROPERTIES:
+:CUSTOM_ID: later-commits
+:END:
+
+#+begin_src sh
+git add -A
+git commit -m "Say what changed"
+git push
+#+end_src
+
+If you changed the engine, the demo or a shader, rebuild and run the checks
+before you push. The workflow runs them too, but it's quicker to find out on
+your own machine. If you edited an =.org= page, export the HTML again with
+=make -C docs html= so the two stay in step.
+
+* Making a release
+:PROPERTIES:
+:CUSTOM_ID: making-a-release
+:END:
+
+A release is a git tag with files attached to it on GitHub. Each release of
+the demo carries two files:
+
+- =hello-world.bin=, the 64k demo itself
+- =hello-world-1080p60.mp4=, the video
+
+The README's poster links to
+=releases/latest/download/hello-world-1080p60.mp4=. So the video has to keep
+exactly that name, and it has to be attached to every new release, because the
+link only looks in the latest one.
+
+Release from a clean tree, so the files match the tagged commit. =git status=
+should have nothing to report. Build and check once more:
+
+#+begin_src sh
+make hello-world
+python3 tools/verify.py
+#+end_src
+
+Tag the commit, push the tag, and check that GitHub has it:
+
+#+begin_src sh
+git tag -a v0.1 -m "Hello World, a 64k demo for Linux"
+git push origin v0.1
+git ls-remote --tags origin v0.1      # prints the tag if GitHub has it
+#+end_src
+
+Then create the release on the website. Open the repository, click Releases
+(to the right of the file list), then Draft a new release. Or go straight to
+=https://github.com/YOUR-NAME/microcosm/releases/new?tag=v0.1=, which picks the
+tag for you. On that page:
+
+1. Under Choose a tag, pick =v0.1=, the tag you just pushed. Don't create a
+   new tag there, or GitHub makes one of its own on the latest commit.
+2. Set the release title, for example "Hello World".
+3. Under Describe this release, write a few lines about the release, with the
+   =.bin='s SHA-256 and how to run it (see
+   [[#release-notes-for-people-who-run-the-file][the next section]]).
+4. Drag =build/hello-world/hello-world.bin= and
+   =media/hello-world-1080p60.mp4= into the box for binaries. The video is
+   357 MB, so it takes a few minutes to upload. Wait until both files are
+   listed.
+5. Leave This is a pre-release unticked, and tick Set as latest release. The
+   project's versions start at 0.1, but that doesn't make them pre-releases.
+   GitHub never counts a pre-release as the latest release, so ticking the box
+   would leave the README's video link with nothing to find.
+6. Click Publish release.
+
+When it's done, open the repository's front page and click the poster to check
+that the video plays.
+
+** Release notes for people who run the file
+:PROPERTIES:
+:CUSTOM_ID: release-notes-for-people-who-run-the-file
+:END:
+
+A file downloaded from a release isn't executable, and neither is one unzipped
+from a workflow artifact, because GitHub's artifact zips don't keep file
+permissions. So tell people to set the executable bit, and give them the
+=.bin='s SHA-256 to check their copy against. The hash is =packed_sha256= in
+=pack.json=, which is also what =sha256sum= prints for the file you attach.
+Something like this does it:
+
+#+begin_example
+hello-world.bin is the 64k demo, for Linux on x86_64 with OpenGL 4.5.
+SHA-256: <packed_sha256 from pack.json>
+
+    chmod +x hello-world.bin
+    sha256sum hello-world.bin      # should print the hash above
+    ./hello-world.bin              # ESC quits
+#+end_example
+
+[[https://github.com/fuzztheplanet/microcosm#requirements][The README's requirements]] list the libraries
+and the kernel it needs to run.
+
+** Which .bin to attach
+:PROPERTIES:
+:CUSTOM_ID: which-bin-to-attach
+:END:
+
+The packed size depends on the compiler. The demo fits with GCC 16.2 and
+binutils 2.47 on Arch Linux, and other toolchains can come out a few hundred
+bytes either way.
+
+If your build doesn't fit, =make= stops with the =pack failed= line shown in
+[[#reading-a-failed-run][Reading a failed run]]. =pack.py= only ever replaces
+the =.bin= and =pack.json= with a file that fits, so the ones from your last
+successful build are still in =build/hello-world/=, and they don't match the
+commit you're releasing. Attach a =.bin= from =build/= only straight after a
+=make= that succeeded, or start again from =make clean=. To check the files you
+have:
+
+#+begin_src sh
+sha256sum build/hello-world/hello-world.bin build/hello-world/.release/payload.elf
+stat -c %s build/hello-world/hello-world.bin
+grep -E '_sha256|packed_bytes' build/hello-world/.release/pack.json
+#+end_src
+
+The =.bin='s hash and size should be =packed_sha256= and =packed_bytes=, and
+=payload.elf='s hash should be =input_sha256=. A failed pack leaves a freshly
+linked =payload.elf= behind, so after one that last pair differs.
+
+If your compiler can't fit the demo, attach the =.bin= from a passing workflow
+run instead. On the repository's Actions tab, open the run of the tagged commit
+and download the =hello-world= artifact at the bottom of its summary page. It
+comes as a zip holding =hello-world.bin= and its =.release/pack.json=. Unzip it
+outside the project, so it can't end up in a commit. Check the =.bin= against
+that =pack.json= as above, and attach it instead of the one under =build/=.
+
+Two things to know about that file. The workflow runs in the
+=archlinux:latest= container and installs its toolchain with =pacman -Syu=, so
+it builds with whatever GCC and binutils Arch ships on the day of the run,
+which may not be what you have. A GCC update can move the size either way. The
+=compiler= field in its =pack.json= records the GCC it used, so compare it with
+=gcc --version= on your machine. Also, GitHub deletes artifacts after 90 days
+unless the repository is set to keep them for a different time. To get a fresh
+one for an older tag, run the workflow by hand: on the Actions tab, pick build,
+then Run workflow, and choose the tag. That run uses the toolchain Arch ships
+that day.
+
+* Updating a release
+:PROPERTIES:
+:CUSTOM_ID: updating-a-release
+:END:
+
+To replace a file on a release that's already out, open Releases, click the
+pencil (Edit) next to the release, delete the old file from the list of
+attached files, drag in the new one and click Update release. If you replace
+the =.bin=, update its SHA-256 in the notes too.
+
+This doesn't work if the repository has immutable releases switched on. Then a
+published release can't change, and you have to make a new one.
+
+For a new version, go through [[#making-a-release][Making a release]] again
+with a new tag, say =v0.2=, and attach both files again. A draft or a
+pre-release never becomes the latest release, so the README's link keeps
+pointing at the previous one until you publish a normal release.
+
+* Why the video isn't in git
+:PROPERTIES:
+:CUSTOM_ID: why-the-video-isnt-in-git
+:END:
+
+GitHub refuses files over 100 MB in a repository, and the video is 357 MB. At
+a bitrate that would fit, about 2.5 Mb/s, the reef flight smears badly. Git LFS
+could hold the file, but then every clone would download it, and the free LFS
+quota is small. A release file can be up to 2 GiB, and GitHub doesn't limit how
+often people download it.

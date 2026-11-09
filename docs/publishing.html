@@ -1,0 +1,667 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Publishing on GitHub</title>
+<meta name="generator" content="Org Mode" />
+<style type="text/css">
+  #content { max-width: 60em; margin: auto; }
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #e6e6e6;
+    border-radius: 3px;
+    background-color: #f2f2f2;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: auto;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    top: -8px;
+    right: 12px;
+    padding: 3px;
+    color: #555;
+    background-color: #f2f2f299;
+  }
+  pre.src:hover:before { display: inline; margin-top: 14px;}
+  /* Languages per Org manual */
+  pre.src-asymptote:before { content: 'Asymptote'; }
+  pre.src-awk:before { content: 'Awk'; }
+  pre.src-authinfo::before { content: 'Authinfo'; }
+  pre.src-c:before { content: 'C'; }
+  pre.src-C:before { content: 'C'; }
+  /* pre.src-C++ doesn't work in CSS */
+  pre.src-clojure:before { content: 'Clojure'; }
+  pre.src-css:before { content: 'CSS'; }
+  pre.src-D:before { content: 'D'; }
+  pre.src-ditaa:before { content: 'ditaa'; }
+  pre.src-dot:before { content: 'Graphviz'; }
+  pre.src-calc:before { content: 'Emacs Calc'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-fortran:before { content: 'Fortran'; }
+  pre.src-gnuplot:before { content: 'gnuplot'; }
+  pre.src-haskell:before { content: 'Haskell'; }
+  pre.src-hledger:before { content: 'hledger'; }
+  pre.src-java:before { content: 'Java'; }
+  pre.src-js:before { content: 'JavaScript'; }
+  pre.src-latex:before { content: 'LaTeX'; }
+  pre.src-ledger:before { content: 'Ledger'; }
+  pre.src-lisp:before { content: 'Lisp'; }
+  pre.src-lilypond:before { content: 'Lilypond'; }
+  pre.src-lua:before { content: 'Lua'; }
+  pre.src-matlab:before { content: 'MATLAB'; }
+  pre.src-mscgen:before { content: 'Mscgen'; }
+  pre.src-ocaml:before { content: 'Objective Caml'; }
+  pre.src-octave:before { content: 'Octave'; }
+  pre.src-org:before { content: 'Org mode'; }
+  pre.src-oz:before { content: 'OZ'; }
+  pre.src-plantuml:before { content: 'Plantuml'; }
+  pre.src-processing:before { content: 'Processing.js'; }
+  pre.src-python:before { content: 'Python'; }
+  pre.src-R:before { content: 'R'; }
+  pre.src-ruby:before { content: 'Ruby'; }
+  pre.src-sass:before { content: 'Sass'; }
+  pre.src-scheme:before { content: 'Scheme'; }
+  pre.src-screen:before { content: 'Gnu Screen'; }
+  pre.src-sed:before { content: 'Sed'; }
+  pre.src-sh:before { content: 'shell'; }
+  pre.src-sql:before { content: 'SQL'; }
+  pre.src-sqlite:before { content: 'SQLite'; }
+  /* additional languages in org.el's org-babel-load-languages alist */
+  pre.src-forth:before { content: 'Forth'; }
+  pre.src-io:before { content: 'IO'; }
+  pre.src-J:before { content: 'J'; }
+  pre.src-makefile:before { content: 'Makefile'; }
+  pre.src-maxima:before { content: 'Maxima'; }
+  pre.src-perl:before { content: 'Perl'; }
+  pre.src-picolisp:before { content: 'Pico Lisp'; }
+  pre.src-scala:before { content: 'Scala'; }
+  pre.src-shell:before { content: 'Shell Script'; }
+  pre.src-ebnf2ps:before { content: 'ebfn2ps'; }
+  /* additional language identifiers per "defun org-babel-execute"
+       in ob-*.el */
+  pre.src-cpp:before  { content: 'C++'; }
+  pre.src-abc:before  { content: 'ABC'; }
+  pre.src-coq:before  { content: 'Coq'; }
+  pre.src-groovy:before  { content: 'Groovy'; }
+  /* additional language identifiers from org-babel-shell-names in
+     ob-shell.el: ob-shell is the only babel language using a lambda to put
+     the execution function name together. */
+  pre.src-bash:before  { content: 'bash'; }
+  pre.src-csh:before  { content: 'csh'; }
+  pre.src-ash:before  { content: 'ash'; }
+  pre.src-dash:before  { content: 'dash'; }
+  pre.src-ksh:before  { content: 'ksh'; }
+  pre.src-mksh:before  { content: 'mksh'; }
+  pre.src-posh:before  { content: 'posh'; }
+  /* Additional Emacs modes also supported by the LaTeX listings package */
+  pre.src-ada:before { content: 'Ada'; }
+  pre.src-asm:before { content: 'Assembler'; }
+  pre.src-caml:before { content: 'Caml'; }
+  pre.src-delphi:before { content: 'Delphi'; }
+  pre.src-html:before { content: 'HTML'; }
+  pre.src-idl:before { content: 'IDL'; }
+  pre.src-mercury:before { content: 'Mercury'; }
+  pre.src-metapost:before { content: 'MetaPost'; }
+  pre.src-modula-2:before { content: 'Modula-2'; }
+  pre.src-pascal:before { content: 'Pascal'; }
+  pre.src-ps:before { content: 'PostScript'; }
+  pre.src-prolog:before { content: 'Prolog'; }
+  pre.src-simula:before { content: 'Simula'; }
+  pre.src-tcl:before { content: 'tcl'; }
+  pre.src-tex:before { content: 'TeX'; }
+  pre.src-plain-tex:before { content: 'Plain TeX'; }
+  pre.src-verilog:before { content: 'Verilog'; }
+  pre.src-vhdl:before { content: 'VHDL'; }
+  pre.src-xml:before { content: 'XML'; }
+  pre.src-nxml:before { content: 'XML'; }
+  /* add a generic configuration mode; LaTeX export needs an additional
+     (add-to-list 'org-latex-listings-langs '(conf " ")) in .emacs */
+  pre.src-conf:before { content: 'Configuration File'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .equation-container {
+    display: table;
+    text-align: center;
+    width: 100%;
+  }
+  .equation {
+    vertical-align: middle;
+  }
+  .equation-label {
+    display: table-cell;
+    text-align: right;
+    vertical-align: middle;
+  }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  .org-svg { }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism-themes/1.9.0/prism-one-light.min.css" integrity="sha384-wfpYO27rpeJ2ZOVwfG6TuU4ahxLdxLmGXK/BiSH98jJye0CNNWTOM+kA8rP8Yg4p" crossorigin="anonymous">
+<script>window.Prism = window.Prism || {}; window.Prism.manual = true;</script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/prism.min.js" integrity="sha384-xAgN7OCsK5s0d3G18tqRYrxy8hWsPA14E26TMh7Mi9ZM09vaz4EA0DBTl+80F5yC" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/components/prism-c.min.js" integrity="sha384-gaD4ncierlmWk42Z3BmTp37/z+Dqt8V4Wf74UjTvFeo+M+SgnEI6Ysd98pWhksQv" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/components/prism-bash.min.js" integrity="sha384-9WmlN8ABpoFSSHvBGGjhvB3E/D8UkNB9HpLJjBQFC2VSQsM1odiQDv4NbEo+7l15" crossorigin="anonymous"></script>
+<script>document.addEventListener("DOMContentLoaded", function () {
+if (!window.Prism || !Prism.highlightElement) return;
+/* Org marks blocks as pre.src-LANG > code; Prism wants the class language-LANG on the code element. */
+document.querySelectorAll("pre.src > code").forEach(function (code) {
+var m = code.parentElement.className.match(/\bsrc-(\S+)/);
+if (m && Prism.languages[m[1]]) { code.classList.add("language-" + m[1]); Prism.highlightElement(code); }
+});
+});</script>
+<script>document.addEventListener("DOMContentLoaded", function () {
+/* A pilcrow after each heading links to it. A click puts the link in the URL bar and on the clipboard. */
+document.querySelectorAll("h2[id], h3[id], h4[id]").forEach(function (h) {
+var page = location.pathname.split("/").pop() || "index.html";
+var a = document.createElement("a");
+a.className = "heading-link";
+a.href = "#" + h.id;
+a.title = page + "#" + h.id;
+a.textContent = "¶";
+a.addEventListener("click", function (e) {
+e.preventDefault();
+history.replaceState(null, "", "#" + h.id);
+navigator.clipboard.writeText(location.href).then(function () {
+a.textContent = "✓";
+setTimeout(function () { a.textContent = "¶" }, 1200);
+});
+});
+h.appendChild(a);
+});
+});</script>
+<style> a.heading-link{margin-left:.4em;font-size:.7em;opacity:0;text-decoration:none;vertical-align:middle;transition:opacity .15s} h2:hover a.heading-link,h3:hover a.heading-link,h4:hover a.heading-link{opacity:.6} a.heading-link:hover{opacity:1 !important} </style>
+<style> body{max-width:52em;margin:2em auto;padding:0 1em;line-height:1.55;font-family:Georgia,"Times New Roman",serif;color:#1a1a1a} h1,h2,h3,h4{font-family:-apple-system,Helvetica,Arial,sans-serif;line-height:1.2} pre.src,pre.example{overflow-x:auto;background:#f6f8fa;padding:.6em;border-radius:4px;margin:1.2em} pre.src code{background:none;padding:0;font-size:.8125rem} table{border-collapse:collapse;margin:1em 0} th,td{border:1px solid #ccc;padding:.25em .6em} code{background:#f0f0f0;padding:0 .25em;border-radius:3px} blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:1em;color:#444} a{color:#0645ad} </style>
+</head>
+<body>
+<div id="content" class="content">
+<h1 class="title">Publishing on GitHub
+<br />
+<span class="subtitle">The first push, later commits, and releases</span>
+</h1>
+<div id="table-of-contents" role="doc-toc">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents" role="doc-toc">
+<ul>
+<li><a href="#before-you-start">1. Before you start</a></li>
+<li><a href="#what-goes-into-git">2. What goes into git</a></li>
+<li><a href="#the-first-push">3. The first push</a></li>
+<li><a href="#reading-a-failed-run">4. Reading a failed run</a></li>
+<li><a href="#the-docs-on-github-pages">5. The docs on GitHub Pages</a></li>
+<li><a href="#later-commits">6. Later commits</a></li>
+<li><a href="#making-a-release">7. Making a release</a>
+<ul>
+<li><a href="#release-notes-for-people-who-run-the-file">7.1. Release notes for people who run the file</a></li>
+<li><a href="#which-bin-to-attach">7.2. Which .bin to attach</a></li>
+</ul>
+</li>
+<li><a href="#updating-a-release">8. Updating a release</a></li>
+<li><a href="#why-the-video-isnt-in-git">9. Why the video isn't in git</a></li>
+</ul>
+</div>
+</div>
+<p>
+<a href="index.html">↑ Back to the index</a>
+</p>
+
+<p>
+This page is for whoever publishes the repository. It covers the first push to
+GitHub, the commits after that, and releases. Everything that git can do is
+done with plain <code>git</code> commands. The rest, creating the repository and
+attaching files to a release, is done on the GitHub website, because git has
+no notion of either.
+</p>
+
+<p>
+Releases matter more here than in most projects. The 64k file and the video of
+the demo are both kept out of git, so a release is the only place people can
+download them. The poster at the top of the README also links to the video in
+the latest release, and that link stays broken until the first release exists.
+</p>
+<div id="outline-container-before-you-start" class="outline-2">
+<h2 id="before-you-start"><span class="section-number-2">1.</span> Before you start</h2>
+<div class="outline-text-2" id="text-before-you-start">
+<p>
+You need git 2.28 or newer (for <code>git init -b</code>) and a GitHub account that git
+can push to. The commands below use the SSH address, so add your SSH key to
+your GitHub account first. If you'd rather use HTTPS, use the
+<code>https://github.com/...</code> address instead, and give git a personal access token
+when it asks for a password.
+</p>
+
+<p>
+Build the demo and run the checks first, so you know what you're publishing:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>make hello-world
+python3 tools/verify.py
+</code></pre>
+</div>
+
+<p>
+The 64k file is <code>build/hello-world/hello-world.bin</code>. Its size and hash are in
+<code>build/hello-world/.release/pack.json</code>.
+</p>
+
+<p>
+The video is <code>media/hello-world-1080p60.mp4</code>. It isn't in git, so a fresh clone
+doesn't have it. <code>make capture</code> makes it:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>make capture      # writes media/hello-world-1080p60.mp4
+</code></pre>
+</div>
+
+<p>
+It renders the whole show offline, with no window and no sound, and it needs
+<code>ffmpeg</code> with <code>libx264</code>. The published video was rendered with Mesa on a
+laptop's Intel UHD 620 integrated graphics: 3840x2160 internally, downsampled
+to 1920x1080 at a playback rate of 60 fps. Its render alone took 57 minutes,
+followed by two encoding passes. That's an offline render, not a real-time
+benchmark. The stills under <code>media/</code> are frames of the same video, so make
+them again whenever you record a new one (see
+<a href="pipeline.html#the-stills-and-the-poster">the pipeline doc</a>). The
+capture also needs about 3 GB free under <code>build/</code> for the near-lossless
+master it encodes from. The
+master is deleted once the video is written. If a run stops after the render,
+the next one starts from the master. The recipe and its settings are in
+<a href="pipeline.html#recording-the-video">the pipeline doc</a>.
+</p>
+</div>
+</div>
+<div id="outline-container-what-goes-into-git" class="outline-2">
+<h2 id="what-goes-into-git"><span class="section-number-2">2.</span> What goes into git</h2>
+<div class="outline-text-2" id="text-what-goes-into-git">
+<p>
+<code>.gitignore</code> keeps out <code>build/</code> (everything <code>make</code> writes, the <code>.bin</code>
+included), every <code>.mp4</code>, and stray <code>.o</code>, <code>.bin</code> and <code>.elf</code> files anywhere
+in the tree. Everything else goes in, the exported HTML under <code>docs/</code> too, so
+people can read the docs without Emacs and GitHub Pages can serve them (see
+<a href="#the-docs-on-github-pages">The docs on GitHub Pages</a>). That's a few
+megabytes in all, most of it the HTML and the JPEG stills under <code>media/</code>.
+</p>
+
+<p>
+<code>.gitattributes</code> stores text files with LF line endings. The Makefiles and the
+shell scripts need them, so leave it in place.
+</p>
+</div>
+</div>
+<div id="outline-container-the-first-push" class="outline-2">
+<h2 id="the-first-push"><span class="section-number-2">3.</span> The first push</h2>
+<div class="outline-text-2" id="text-the-first-push">
+<p>
+Create an empty repository on GitHub first: click the + at the top right of
+any GitHub page, then New repository. Don't let GitHub add a README, a licence
+or a <code>.gitignore</code>, because the project has its own. Then, from the top of the
+project:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>git init -b main
+git add -A
+git status --short        # nothing under build/, no .mp4
+git commit -m "MICROCOSM and the Hello World demo"
+git remote add origin git@github.com:YOUR-NAME/microcosm.git
+git push -u origin main
+</code></pre>
+</div>
+
+<p>
+Look over the list that <code>git status</code> prints before you commit. If anything
+from <code>build/</code> or a video shows up, something is wrong with <code>.gitignore</code>, and
+GitHub will refuse the push anyway (it rejects files over 100 MB). If git asks
+who you are, set <code>git config user.name</code> and <code>git config user.email</code> and commit
+again.
+</p>
+
+<p>
+The push starts the build workflow (<code>.github/workflows/build.yml</code>). It builds
+the demo on Arch Linux and fails if the packed file is over 65,536 bytes. Then
+it runs the regression checks, rendering on the CPU. If both pass, it keeps the
+<code>.bin</code> and its <code>pack.json</code> as an artifact of the run. It takes a while. You can
+follow it on the repository's Actions tab.
+</p>
+</div>
+</div>
+<div id="outline-container-reading-a-failed-run" class="outline-2">
+<h2 id="reading-a-failed-run"><span class="section-number-2">4.</span> Reading a failed run</h2>
+<div class="outline-text-2" id="text-reading-a-failed-run">
+<p>
+A failed run has a red cross on the Actions tab. Open it, then the
+<code>hello-world</code> job. The job lists its steps, marks the one that failed and opens
+its log. The steps after it are skipped, the artifact upload too, so a failed
+run has no <code>.bin</code> to download.
+</p>
+
+<p>
+If the packed file came out over budget, the failed step is Build (debug build
+and the packed 64k). Near the end of its log, just before make's own <code>Error</code>
+lines, is this line from <code>tools/pack.py</code>:
+</p>
+
+<pre class="example" id="org8ef2693">
+pack failed: 65612 bytes exceeds 65536-byte budget; no candidate published (any previous output is unchanged)
+</pre>
+
+<p>
+The first number is the packed size. A build that fits prints its size in the
+next step, Size, for example <code>hello-world.bin: 63,237 / 65,536 bytes, 2,299 free</code>.
+</p>
+
+<p>
+If the step that failed is Regression checks (software rendering),
+<code>tools/verify.py</code> has stopped at the first check that failed. The log shows
+that check's own output, then a Python traceback that ends in
+<code>CalledProcessError</code> and names the command. The checks never look at the
+packed size. They build their own test programs from the sources and render
+with Mesa's <code>llvmpipe</code>. The <code>Evidence:</code> directory that <code>verify.py</code> names at the
+start stays inside the runner and isn't kept.
+</p>
+</div>
+</div>
+<div id="outline-container-the-docs-on-github-pages" class="outline-2">
+<h2 id="the-docs-on-github-pages"><span class="section-number-2">5.</span> The docs on GitHub Pages</h2>
+<div class="outline-text-2" id="text-the-docs-on-github-pages">
+<p>
+GitHub shows the <code>.org</code> pages itself, but its Org renderer drops the section
+part of a link to another page, so such a link opens that page at the top. The
+exported HTML doesn't have this problem, and GitHub Pages can serve it from
+<code>docs/</code>. The README and <a href="index.html">the index</a> point readers to that
+copy, at <code>https://fuzztheplanet.github.io/microcosm/</code>.
+</p>
+
+<p>
+Pages is switched on once, on the website, after the first push:
+</p>
+
+<ol class="org-ol">
+<li>Open the repository's Settings, then Pages in the list on the left.</li>
+<li>Under Build and deployment, set Source to Deploy from a branch.</li>
+<li>Under Branch, pick <code>main</code> and the <code>/docs</code> folder, then click Save.</li>
+</ol>
+
+<p>
+A minute or two later the Pages settings show the site's address, and
+<code>index.html</code> is its front page. From then on every push to <code>main</code> publishes
+the HTML in <code>docs/</code> again. So export it with <code>make -C docs html</code> before you
+commit a change to an <code>.org</code> page, or the site falls behind. The empty
+<code>docs/.nojekyll</code> file makes Pages serve the files as they are, without running
+them through Jekyll first.
+</p>
+
+<p>
+The address comes from the account and the repository's name. If the project
+lives somewhere else, search the README and <code>docs/*.org</code> for
+<code>fuzztheplanet</code> and change those links, then export the HTML again.
+</p>
+</div>
+</div>
+<div id="outline-container-later-commits" class="outline-2">
+<h2 id="later-commits"><span class="section-number-2">6.</span> Later commits</h2>
+<div class="outline-text-2" id="text-later-commits">
+<div class="org-src-container">
+<pre class="src src-sh"><code>git add -A
+git commit -m "Say what changed"
+git push
+</code></pre>
+</div>
+
+<p>
+If you changed the engine, the demo or a shader, rebuild and run the checks
+before you push. The workflow runs them too, but it's quicker to find out on
+your own machine. If you edited an <code>.org</code> page, export the HTML again with
+<code>make -C docs html</code> so the two stay in step.
+</p>
+</div>
+</div>
+<div id="outline-container-making-a-release" class="outline-2">
+<h2 id="making-a-release"><span class="section-number-2">7.</span> Making a release</h2>
+<div class="outline-text-2" id="text-making-a-release">
+<p>
+A release is a git tag with files attached to it on GitHub. Each release of
+the demo carries two files:
+</p>
+
+<ul class="org-ul">
+<li><code>hello-world.bin</code>, the 64k demo itself</li>
+<li><code>hello-world-1080p60.mp4</code>, the video</li>
+</ul>
+
+<p>
+The README's poster links to
+<code>releases/latest/download/hello-world-1080p60.mp4</code>. So the video has to keep
+exactly that name, and it has to be attached to every new release, because the
+link only looks in the latest one.
+</p>
+
+<p>
+Release from a clean tree, so the files match the tagged commit. <code>git status</code>
+should have nothing to report. Build and check once more:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>make hello-world
+python3 tools/verify.py
+</code></pre>
+</div>
+
+<p>
+Tag the commit, push the tag, and check that GitHub has it:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>git tag -a v0.1 -m "Hello World, a 64k demo for Linux"
+git push origin v0.1
+git ls-remote --tags origin v0.1      # prints the tag if GitHub has it
+</code></pre>
+</div>
+
+<p>
+Then create the release on the website. Open the repository, click Releases
+(to the right of the file list), then Draft a new release. Or go straight to
+<code>https://github.com/YOUR-NAME/microcosm/releases/new?tag=v0.1</code>, which picks the
+tag for you. On that page:
+</p>
+
+<ol class="org-ol">
+<li>Under Choose a tag, pick <code>v0.1</code>, the tag you just pushed. Don't create a
+new tag there, or GitHub makes one of its own on the latest commit.</li>
+<li>Set the release title, for example "Hello World".</li>
+<li>Under Describe this release, write a few lines about the release, with the
+<code>.bin</code>'s SHA-256 and how to run it (see
+<a href="#release-notes-for-people-who-run-the-file">the next section</a>).</li>
+<li>Drag <code>build/hello-world/hello-world.bin</code> and
+<code>media/hello-world-1080p60.mp4</code> into the box for binaries. The video is
+357 MB, so it takes a few minutes to upload. Wait until both files are
+listed.</li>
+<li>Leave This is a pre-release unticked, and tick Set as latest release. The
+project's versions start at 0.1, but that doesn't make them pre-releases.
+GitHub never counts a pre-release as the latest release, so ticking the box
+would leave the README's video link with nothing to find.</li>
+<li>Click Publish release.</li>
+</ol>
+
+<p>
+When it's done, open the repository's front page and click the poster to check
+that the video plays.
+</p>
+</div>
+<div id="outline-container-release-notes-for-people-who-run-the-file" class="outline-3">
+<h3 id="release-notes-for-people-who-run-the-file"><span class="section-number-3">7.1.</span> Release notes for people who run the file</h3>
+<div class="outline-text-3" id="text-release-notes-for-people-who-run-the-file">
+<p>
+A file downloaded from a release isn't executable, and neither is one unzipped
+from a workflow artifact, because GitHub's artifact zips don't keep file
+permissions. So tell people to set the executable bit, and give them the
+<code>.bin</code>'s SHA-256 to check their copy against. The hash is <code>packed_sha256</code> in
+<code>pack.json</code>, which is also what <code>sha256sum</code> prints for the file you attach.
+Something like this does it:
+</p>
+
+<pre class="example" id="orge29a2cd">
+hello-world.bin is the 64k demo, for Linux on x86_64 with OpenGL 4.5.
+SHA-256: &lt;packed_sha256 from pack.json&gt;
+
+    chmod +x hello-world.bin
+    sha256sum hello-world.bin      # should print the hash above
+    ./hello-world.bin              # ESC quits
+</pre>
+
+<p>
+<a href="https://github.com/fuzztheplanet/microcosm#requirements">The README's requirements</a> list the libraries
+and the kernel it needs to run.
+</p>
+</div>
+</div>
+<div id="outline-container-which-bin-to-attach" class="outline-3">
+<h3 id="which-bin-to-attach"><span class="section-number-3">7.2.</span> Which .bin to attach</h3>
+<div class="outline-text-3" id="text-which-bin-to-attach">
+<p>
+The packed size depends on the compiler. The demo fits with GCC 16.2 and
+binutils 2.47 on Arch Linux, and other toolchains can come out a few hundred
+bytes either way.
+</p>
+
+<p>
+If your build doesn't fit, <code>make</code> stops with the <code>pack failed</code> line shown in
+<a href="#reading-a-failed-run">Reading a failed run</a>. <code>pack.py</code> only ever replaces
+the <code>.bin</code> and <code>pack.json</code> with a file that fits, so the ones from your last
+successful build are still in <code>build/hello-world/</code>, and they don't match the
+commit you're releasing. Attach a <code>.bin</code> from <code>build/</code> only straight after a
+<code>make</code> that succeeded, or start again from <code>make clean</code>. To check the files you
+have:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>sha256sum build/hello-world/hello-world.bin build/hello-world/.release/payload.elf
+stat -c %s build/hello-world/hello-world.bin
+grep -E '_sha256|packed_bytes' build/hello-world/.release/pack.json
+</code></pre>
+</div>
+
+<p>
+The <code>.bin</code>'s hash and size should be <code>packed_sha256</code> and <code>packed_bytes</code>, and
+<code>payload.elf</code>'s hash should be <code>input_sha256</code>. A failed pack leaves a freshly
+linked <code>payload.elf</code> behind, so after one that last pair differs.
+</p>
+
+<p>
+If your compiler can't fit the demo, attach the <code>.bin</code> from a passing workflow
+run instead. On the repository's Actions tab, open the run of the tagged commit
+and download the <code>hello-world</code> artifact at the bottom of its summary page. It
+comes as a zip holding <code>hello-world.bin</code> and its <code>.release/pack.json</code>. Unzip it
+outside the project, so it can't end up in a commit. Check the <code>.bin</code> against
+that <code>pack.json</code> as above, and attach it instead of the one under <code>build/</code>.
+</p>
+
+<p>
+Two things to know about that file. The workflow runs in the
+<code>archlinux:latest</code> container and installs its toolchain with <code>pacman -Syu</code>, so
+it builds with whatever GCC and binutils Arch ships on the day of the run,
+which may not be what you have. A GCC update can move the size either way. The
+<code>compiler</code> field in its <code>pack.json</code> records the GCC it used, so compare it with
+<code>gcc --version</code> on your machine. Also, GitHub deletes artifacts after 90 days
+unless the repository is set to keep them for a different time. To get a fresh
+one for an older tag, run the workflow by hand: on the Actions tab, pick build,
+then Run workflow, and choose the tag. That run uses the toolchain Arch ships
+that day.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-updating-a-release" class="outline-2">
+<h2 id="updating-a-release"><span class="section-number-2">8.</span> Updating a release</h2>
+<div class="outline-text-2" id="text-updating-a-release">
+<p>
+To replace a file on a release that's already out, open Releases, click the
+pencil (Edit) next to the release, delete the old file from the list of
+attached files, drag in the new one and click Update release. If you replace
+the <code>.bin</code>, update its SHA-256 in the notes too.
+</p>
+
+<p>
+This doesn't work if the repository has immutable releases switched on. Then a
+published release can't change, and you have to make a new one.
+</p>
+
+<p>
+For a new version, go through <a href="#making-a-release">Making a release</a> again
+with a new tag, say <code>v0.2</code>, and attach both files again. A draft or a
+pre-release never becomes the latest release, so the README's link keeps
+pointing at the previous one until you publish a normal release.
+</p>
+</div>
+</div>
+<div id="outline-container-why-the-video-isnt-in-git" class="outline-2">
+<h2 id="why-the-video-isnt-in-git"><span class="section-number-2">9.</span> Why the video isn't in git</h2>
+<div class="outline-text-2" id="text-why-the-video-isnt-in-git">
+<p>
+GitHub refuses files over 100 MB in a repository, and the video is 357 MB. At
+a bitrate that would fit, about 2.5 Mb/s, the reef flight smears badly. Git LFS
+could hold the file, but then every clone would download it, and the free LFS
+quota is small. A release file can be up to 2 GiB, and GitHub doesn't limit how
+often people download it.
+</p>
+</div>
+</div>
+</div>
+</body>
+</html>

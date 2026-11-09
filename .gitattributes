@@ -1,0 +1,5 @@
+# Text files are stored and checked out with LF endings, which the Makefiles
+# and shell scripts need. The media files are binary.
+* text=auto eol=lf
+*.jpg binary
+*.mp4 binary

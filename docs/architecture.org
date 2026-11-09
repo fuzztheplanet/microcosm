@@ -1,0 +1,1553 @@
+#+TITLE: MICROCOSM internals
+#+SUBTITLE: How the engine is put together, and why
+#+SETUPFILE: setup.org
+#+OPTIONS: toc:3
+
+[[file:index.org][↑ Back to the index]]
+
+This page describes how the engine is put together and why, and what happens
+between pressing Enter and the first frame of the show. For what each function
+does, see [[file:toolkit.org][the toolkit reference]]. For how the binary gets
+small, see [[file:pipeline.org][the pipeline doc]].
+
+It assumes you can read C and have a rough idea of what a GPU does, but not
+that you've ever made a 64k intro.
+
+Some performance figures and visual comparisons below were measured on an
+earlier version of the demo. It still had volumetric jungle clouds, dust motes
+and beach reflections of nearby objects, and its staging, materials, animation
+and music were different. Unless a figure is identified as current, it hasn't
+been measured again since.
+
+-----
+
+* The shape of the thing
+:PROPERTIES:
+:CUSTOM_ID: the-shape-of-the-thing
+:END:
+
+MICROCOSM is a handful of small modules, each doing one job. They talk to each
+other through plain structs and functions, and there's no framework on top, so
+you can read the code from top to bottom.
+
+#+begin_example
+                               mc.h   types, the dev/release switch, log/assert
+                                |
+  +--------+---------+----------+----------+----------+----------+
+  |        |         |          |          |          |          |
+ math      gl     platform     mesh      render     scene      audio
+(cpu)   (loader   (window,     (cpu      (gpu:     (camera,   (synth +
+         table)    input,   geometry)   shaders,  timeline)     ALSA
+                  pixels)               targets,              thread)
+                                         post)
+  |        |         |          |          |          |          |
+  +--------+---------+----------+----------+----------+----------+
+                                |
+                     demos/hello-world/main.c
+                          "Hello World"
+#+end_example
+
+Each module depends only on =mc.h= and on the modules to its left in that
+diagram. =math= needs nothing else, =mesh= needs =math=, and =render= needs
+=mesh=, =math= and the =gl= table. =platform= brings up the context and owns
+the GL loader call. The demo pulls from all of them, and nothing reaches back
+the other way.
+
+Everything is prefixed =mc_=, and every public type is a value type you can put
+on the stack. The modules that allocate (=mesh=, =render=, =audio=) each have
+an explicit =_free=. The shipped payload never calls them. It exits and lets
+the OS release everything, so each cleanup is wrapped in =MC_TIDY(...)=, which
+the packed build compiles out.
+
+The two build flavours, =MC_DEV= and =MC_RELEASE=, are the main global
+switch. Dev logs a lot and checks itself, while
+release is silent and small. The headers default to dev if you include them
+without defining either, so they work on their own.
+
+The engine is ordinary C, and most of the work of fitting the demo into 64k
+happens around it, in the build. Only a few parts of the engine are shaped by
+the size limit. The GL loader imports no GL symbols (below). The payload build
+(=MC_IMPORT_HASH=) imports its other library functions by a hash of their
+names and hides the calls it mustn't make. Teardown goes inside =MC_TIDY=, and
+the post shaders are baked into a header and minified with the demo's. See
+[[file:pipeline.org][the pipeline doc]] for the flags, the tools, the packer
+and the numbers.
+
+* Talking to the GPU without linking to it
+:PROPERTIES:
+:CUSTOM_ID: talking-to-the-gpu-without-linking-to-it
+:END:
+
+MICROCOSM never links =libGL=. Linking it would put about 60 named GL imports
+in the binary, plus their relocations, and that's a lot of bytes for something
+that has to fit in 64k.
+
+Instead, every GL entry point is fetched at runtime through =eglGetProcAddress=
+and stored in one table, =mcgl=. A single X-macro list, =MC_GL_FUNCS(X)=, names
+each function once as =X(Name, PFN type)=, and both the table's typed members
+and the NUL-separated blob of names that the loader walks are generated from
+it. The table is a union with a plain =slot[]= array, so =gl_loader.c= can fill
+it in one loop. =mc_gl_load= takes the =getproc= function as an argument, which
+keeps EGL headers out of the loader.
+
+Functions the payload never calls go in a second list, =MC_GL_TOOLS=, which
+the payload build leaves out. These are the info logs, =glGetError= and
+=glGetString=, the headless backend's renderbuffer, pixel read-back, uniforms
+by name and the float and vec3 setters, the non-instanced indexed draw, and the
+teardown the payload skips. A stray use of one in the payload fails to compile.
+Going the other way, =tools/importcheck.py= fails the payload's link if the
+first list holds anything the payload doesn't call
+([[file:pipeline.org::#importcheck-py-the-payload-resolves-only-what-it-calls][=importcheck.py=]]).
+
+To keep the call sites readable, the header follows the table with a =#define=
+for every familiar name, mapping it onto its member:
+
+#+begin_src c
+#define glUseProgram   mcgl.UseProgram
+#define glClear        mcgl.Clear
+#+end_src
+
+So code throughout the engine calls =glUseProgram(...)= and looks like ordinary
+OpenGL, while the linker sees nothing but a struct member dereference. We still
+include =<GL/gl.h>= and =<GL/glext.h>=, but only for the =GLenum= and =GLuint=
+types, the =GL_*= constants and the =PFNGL*PROC= function-pointer typedefs.
+=GL_GLEXT_PROTOTYPES= is never defined, so no GL symbol is referenced at link
+time. The payload's other imports go by hash, so it names no library function
+at all. The pipeline doc has
+[[file:pipeline.org::#the-zero-gl-import-loader][the loader's side of the size story]]
+and [[file:pipeline.org::#genimports-py-hash-the-payload-import-list][the hashed imports]].
+
+If a required entry point is missing, =mc_gl_load= logs it in dev and returns
+0, and =mc_window_open= fails cleanly instead of crashing on a null pointer
+three frames later. In dev builds =MC_GL_CHECK()= adds =glGetError= checks
+after risky sequences, and in release it compiles to nothing.
+
+The header comment of =mc_gl.h= and
+[[file:pipeline.org::#why-opengl-and-not-vulkan-or-d3d12][Why OpenGL, and not Vulkan or D3D12]]
+explain the choice of classic OpenGL. For size-constrained work it makes sense,
+because the driver gives you a great deal of functionality for free.
+
+* The platform seam
+:PROPERTIES:
+:CUSTOM_ID: the-platform-seam
+:END:
+
+=mc_platform.h= is a single API with two implementations, and you link one of
+them.
+
+- =platform_x11_egl.c= is the backend you run. It opens a window with raw
+  Xlib, creates an EGL context for OpenGL 4.5 core, makes it current and calls
+  =mc_gl_load(eglGetProcAddress)=, and from then on it pumps X events and swaps
+  buffers. With =fullscreen= set, as the release has it, it sets the EWMH
+  =_NET_WM_STATE_FULLSCREEN= hint and also opens the window at the screen's
+  size. So the window is the right size from the first frame, even on an X
+  server with no window manager. It also asks a compositing window manager to
+  leave the window unredirected (=_NET_WM_BYPASS_COMPOSITOR=), so the frames
+  reach the screen as drawn, with less latency. A fullscreen window gets a
+  blank pointer too: an empty 1x1 bitmap, used as both the cursor's picture and
+  its mask and handed to =XCreateWindow=.
+- =platform_surfaceless.c= is the headless backend. It does the same bring-up
+  against EGL's surfaceless platform, which needs no window and no X server,
+  and renders into an off-screen FBO. You select it by linking it (with
+  =-lEGL -lm=) in place of =platform_x11_egl.c=, as the capture build and
+  =tools/verify.py= do. It runs even on machines with no display and only
+  =llvmpipe=, Mesa's software rasteriser.
+
+Both expose the same functions, so the engine and the demo don't know which one
+they're linked with. The one place the difference shows is the output
+framebuffer. The renderer finishes by resolving its final image into whatever
+=mc_window_output_fbo()= returns. On the windowed backend that's =0=, the
+default framebuffer the driver presents. Headless has no default framebuffer, so
+that backend creates an RGBA8 FBO and returns its id, and after a frame you can
+read it back with =mc_window_read_pixels= or write it out with
+=mc_window_save_png=. The PNG writer, in =platform_common.c= and shared by both
+backends, is a small encoder of its own that writes zlib stored blocks. A debug
+screenshot isn't worth a =libpng= dependency.
+
+=mc_time_seconds()= is a monotonic clock that starts at its first call. It
+drives the timeline when there's no audio. With audio, the demo uses the audio
+clock instead (see [[#the-master-clock][the master clock]]).
+
+* Math, because everything downstream needs it
+:PROPERTIES:
+:CUSTOM_ID: math-because-everything-downstream-needs-it
+:END:
+
+=math.c= is the most widely used module and the plainest: small pure functions
+with no state, taking and returning value types. A few of its conventions are
+worth knowing, because getting them wrong wastes a lot of time.
+
+Matrices are column-major, stored in =m[16]= the way OpenGL expects, so they
+upload with no transpose. =mc_m4_mul(a, b)= is =a * b= in the usual
+right-to-left sense, so =proj * view * model= reads the way the math does.
+
+Rotations that need to interpolate go through quaternions (=mc_quat=), because
+slerping two quaternions behaves and lerping two matrices doesn't. =mc_m4_trs=
+composes translate * rotate * scale in one go, which is what an instance
+transform needs.
+
+The RNG is a tiny xorshift whose state lives in an =mc_rng= struct the caller
+holds. Seed one and pass it around, and you get the same stream on every run.
+All of the demo's randomness (body positions, palettes, collision outcomes)
+comes from a few of these seeded with fixed constants, so every run is
+identical. See [[#determinism][Determinism]].
+
+The noise functions give value or gradient noise in =[-1, 1]=. =mc_fbm2= and
+=mc_fbm3= sum octaves for the usual cloudy look, and =mc_curl3= gives a
+divergence-free field, useful for flow that never pools. This noise runs on the
+CPU, for mesh displacement. The shaders get their value noise from a texture
+instead: =vn3= makes one fetch from a 32³ volume of random bytes, eased inside
+each cell, and it's the same text in every shader that uses it.
+
+For splines, =mc_catmull_rom= and =mc_bezier3= handle single segments, and
+=mc_spline_sample= walks a whole loop of control points with a =u= in =[0,1]=.
+The demo's camera flies along one of these.
+
+* Building geometry out of arithmetic
+:PROPERTIES:
+:CUSTOM_ID: building-geometry-out-of-arithmetic
+:END:
+
+The project has no mesh files. =mesh.c= builds everything from formulas into a
+simple container, =mc_mesh=: an interleaved vertex array (position, normal and
+a texture coordinate) and a =u32= index array, three indices per triangle. Both
+grow on demand, and you call =mc_mesh_free= when you're done.
+
+** Primitives and modifiers
+:PROPERTIES:
+:CUSTOM_ID: primitives-and-modifiers
+:END:
+
+The primitives (=mc_mesh_box=, =mc_mesh_plane=, =mc_mesh_uv_sphere=,
+=mc_mesh_icosphere=, =mc_mesh_torus=, =mc_mesh_cylinder=, =mc_mesh_cone= and
+=mc_mesh_rounded_box=) are generated the usual way, from grids, swept angles
+and stacked rings. =mc_mesh_icosphere= is different. It starts from a
+20-triangle icosahedron and subdivides, so its triangles stay roughly the same
+size instead of bunching at the poles as a UV sphere's do. That matters once
+you displace it with noise, because uneven triangles show up as uneven bumps.
+Two more constructors make whole shapes: =mc_mesh_terrain= raises a subdivided
+plane into an fBm landscape, and =mc_mesh_torus_knot= sweeps a tube along a
+(p, q) knot.
+
+On top of the primitives sit modifiers that change a mesh in place:
+
+- =mc_mesh_subdivide= splits every triangle into four, giving you more
+  vertices to push around.
+- =mc_mesh_displace_noise= moves each vertex along its normal by a noise field.
+  That's what turns a smooth sphere into something that looks grown.
+- =mc_mesh_spherify= blends vertices toward a sphere, for morphing.
+- =mc_mesh_scale= scales the positions, for a stretched copy.
+- =mc_mesh_recompute_normals= rebuilds smooth normals as the area-weighted
+  average of the adjacent face normals. Call it after any displacement so the
+  lighting follows the new shape.
+
+=mc_mesh_append= stamps one mesh into another through a rigid transform or a
+uniform scale. Take an icosphere and append 18 cones pointing outward along
+directions spread by the golden angle, and you have a spiky sea urchin in about
+a dozen lines of C. =mc_mesh_grid= stitches a block of vertices into triangles,
+and every swept surface, from a torus to a tube, is stitched with it.
+
+=mesh.c= keeps every primitive as toolkit API, and a payload pays nothing for
+what it doesn't call (=--gc-sections=).
+
+** Meshes made on the GPU
+:PROPERTIES:
+:CUSTOM_ID: meshes-made-on-the-gpu
+:END:
+
+Meshes stay on the CPU until you hand them to =mc_mesh_upload=, which is in
+=render.c= because that's where GL lives. A mesh can also skip the CPU
+altogether: =mc_mesh_procedural= makes one with no vertex buffer, and its vertex
+shader builds each vertex from =gl_VertexID=. It's drawn either as a plain
+triangle list of a given number of vertices, or through an index buffer of
+vertex ids so that a vertex shared by several triangles is shaded once.
+
+The reference demo doesn't call =mesh.c= at all. All of its geometry is made on
+the GPU, where it costs no C. Most of it is built in vertex shaders from
+=gl_VertexID=, with a mesh that's only a vertex count. That covers Scene 1's six
+solids (the urchin included), its floor, the blob, the planet, Scene 2's sea,
+the coral and the weed, and everything in Scene 3 except the tyrannosaurus.
+Every animal, the tyrannosaurus included, is sculpted at load by a compute
+shader, the creature kit (=jr.comp=).
+
+Scene 2's seabed and boulders are worked out once at load by the seabed's
+placement shader, =uwplace.comp=, which writes them into a buffer it leaves
+bound for the frames. They're drawn by index through grids of vertex ids. The
+seabed matches =mc_mesh_terrain='s heightfield to a tenth of a millimetre. It
+uses the same hash, quintic value noise, six fBm octaves at the seed's offsets
+and smoothstep shaping, written in GLSL. Each vertex gets the normal of its six
+triangles, summed the way =mc_mesh_recompute_normals= sums them, and the checks
+test the GPU's heights against the engine's. The boulder is
+=mc_mesh_displace_noise='s three layers of the same noise at the same offsets,
+each pushed out along the ball's radius over a cube's six grids. See
+[[file:making-of.org::#what-draws-it][What draws it]] in the making-of for the
+details.
+
+* The renderer and its post stack
+:PROPERTIES:
+:CUSTOM_ID: the-renderer-and-its-post-stack
+:END:
+
+=render.c= owns a small set of render targets and the fixed post shaders, and
+wraps each frame in =begin= / =end=. A frame goes like this:
+
+1. =mc_renderer_frame(R, t)= gives the renderer the frame's time.
+2. =mc_renderer_camera(R, proj, view)= returns the view-projection to draw
+   with, jittered for the TAA.
+3. =mc_renderer_begin(R, clear)= binds the HDR target and clears it.
+4. Your scene draws, and may run passes of its own.
+5. =mc_renderer_end(R, fbo, w, h, post)= runs the post chain and puts the
+   result in the framebuffer you hand it.
+
+** The render targets
+:PROPERTIES:
+:CUSTOM_ID: the-render-targets
+:END:
+
+- =scene= is the HDR target: RGBA16F colour plus a 24-bit depth texture.
+  Everything in your scene draws here in linear light, with nothing clamped to
+  1.0 yet, so bright things stay bright for the bloom pass to find. The depth
+  is a texture rather than a renderbuffer so that the ambient occlusion, the
+  depth of field, the motion blur and the TAA can sample it. The alpha isn't
+  coverage. It holds the ambient share of the pixel's light
+  ([[#the-ambient-share][below]]).
+- =last= is last frame's =scene=. The two swap every frame, so the TAA can
+  compare this frame's depth with the last one's.
+- =bloom[0..5]= is the bloom's mip chain, from half resolution down to 1/64.
+- =ao= and =ao_b= are half-resolution RGBA8 targets holding ambient occlusion
+  in =.r= and contact shadows in =.g=. The depth-aware filter ping-pongs
+  between them.
+- =dof_a= and =dof_b= are quarter-resolution HDR. The first holds the scene with
+  its circles of confusion, the second the depth-of-field gather.
+- =ldr= is an RGBA16F target that holds the tonemapped image just before the
+  TAA, still at the scene's size. It uses half floats although the picture is
+  already display-ready, because at RGBA8 a fade's smooth glow would reach the
+  history in 8-bit steps, and no dither after the TAA can undo that.
+- =hist[2]= is the TAA's history, ping-ponged. It's RGBA16F at the output size,
+  or at the scene's size when that's larger.
+
+The scene targets run at an internal percentage of the output, from 25% to 200%
+([[#internal-resolution-and-supersampling][below]]).
+
+** The frame
+:PROPERTIES:
+:CUSTOM_ID: the-frame
+:END:
+
+Your scene is drawn between =mc_renderer_begin(R, clear)= and
+=mc_renderer_end(...)=. =begin= binds the HDR target and sets up depth and
+back-face culling. One line in it matters more than it looks:
+
+#+begin_src c
+glDepthMask(GL_TRUE);     /* <-- before the clear, on purpose */
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+#+end_src
+
+The post passes leave depth writes disabled. If =begin= cleared the depth
+buffer while the mask was still off, the clear would silently do nothing, every
+frame would inherit last frame's depth, and the geometry would tear itself
+apart for no obvious reason. So the mask is forced on before the clear, and
+=end= turns it back on when it's done.
+
+For the TAA, the camera is jittered. Two calls set this up:
+=mc_renderer_frame(R, t)= at the start of the frame, with the frame's time, and
+=mc_renderer_camera(R, proj, view)= where you'd otherwise use =proj * view=.
+The second call shifts the projection by a sub-pixel step from the Halton (2, 3)
+sequence. It uses eight positions per pixel, in sixteenths of a pixel, so over
+eight frames every pixel is sampled at eight places. The history follows the
+frame's first camera. It carries on while time runs smoothly forward
+(0 < dt < 0.25 s), and starts over, with no jitter, on a jump, a pause, a step
+back, a resize or the first frame. So the jitter depends only on the time. A
+frame rendered on its own, or twice at the same =t=, is the same plain frame,
+which keeps the headless checks deterministic. A caller that never makes these
+calls just gets plain frames.
+
+=mc_renderer_end= runs the post chain ([[#the-post-chain][below]]) and writes
+the result into the framebuffer it's handed. The last frame's view-projection
+is kept for the next frame's reprojection, and =scene= and =last= swap.
+
+** Vertex attributes and instancing
+:PROPERTIES:
+:CUSTOM_ID: vertex-attributes-and-instancing
+:END:
+
+Instancing is how you draw 182 bodies in a handful of draw calls. An uploaded
+mesh's vertices carry a position (location 0), a normal (1) and a texture
+coordinate (7). The UV is 0 unless the mesh's builder set one, and shaders that
+don't read it ignore it. A procedural mesh's vertices carry nothing, and all
+the demo's meshes are procedural. Any =mc_gpu_mesh= can also carry a
+per-instance buffer, whose attributes are the four columns of a model matrix
+(locations 2-5) and an RGB+emissive colour (location 6). Each is set with
+=glVertexAttribDivisor(., 1)=, so it advances once per instance instead of once
+per vertex.
+
+You fill a flat array of =mc_instance= on the CPU, call
+=mc_mesh_set_instances=, then =mc_mesh_draw_instanced=. The buffer only ever
+grows, and a VAO keeps its buffer binding when the storage is replaced. The
+range-draw helper, =mc_mesh_draw_instance_range=, changes the instance offset
+to draw a subset for the camera or the light, and sets it back to zero
+afterwards. Ordinary data uploads don't redefine the attribute pointers.
+
+** The post chain
+:PROPERTIES:
+:CUSTOM_ID: the-post-chain
+:END:
+
+=mc_renderer_end= runs the post chain. Ambient occlusion, depth of field and
+bloom are gated by their strengths in =mc_post=, and their draws are skipped
+when they're off. The AO pass also runs when there's a sun, for the contact
+shadows. Scene 2 ramps its ambient occlusion in over its run, as part of how
+its look grows
+([[file:making-of.org::#the-renderer-evolves-the-uq-ramp][The renderer evolves]]),
+and Scene 3 turns the depth of field on for the ladybug. The passes run in this
+order:
+
+1. ambient occlusion and contact shadows, at half resolution (optional);
+2. depth of field, at quarter resolution (optional);
+3. the bright pass and the bloom's mip chain (optional);
+4. the composite, which grades the frame into =ldr=;
+5. the TAA, which folds it into the history;
+6. the present, which puts the history on the output with the grain on top.
+
+*** Ambient occlusion and contact shadows
+:PROPERTIES:
+:CUSTOM_ID: ambient-occlusion-and-contact-shadows
+:END:
+
+The AO (=mc_post.ssao=) is ground-truth AO (GTAO, after Jimenez et al.) at half
+resolution. It takes two slices through the view direction and in each finds
+how high the depth buffer rises on either side within a metre, capped at 15% of
+the screen. From those two horizons it works out how much cosine-weighted sky
+the pixel still sees about its own normal. Each frame turns the slices and
+moves the steps, so the TAA gathers far more than the 2x2x4 taps one frame
+takes.
+
+Each half-resolution pixel reads one full-resolution depth texel at its centre
+and rebuilds its position from that same texel. Sampling between texels would
+let whole rows flip to a neighbour and draw lines on the floor. The normal is
+rebuilt from the full-resolution depth texels on either side of the pixel's
+own, taking on each axis the side whose depth is nearer. It isn't taken from
+the screen-space derivatives, because at half resolution those span two
+texels, and in every other 2x2 quad along a silhouette they span both sides of
+it. Normals from them would draw dark dashes down every trunk, liana and palm
+stem and speckle the foliage. At the screen's edge one side has no step at all,
+so a trace of the position is added to the cross product, which turns that
+normal toward the eye.
+
+Contact shadows go in =.g= when =mc_post.sun_dir= is set. They take eight
+steps toward the sun through the depth buffer, over 4% of the distance. That
+catches the small shadows the shadow maps are too coarse for, such as a foot on
+the sand or a bug on its leaf. They only run where the scene's alpha says
+some of the light is the sun's. A step counts as a hit when it ends 0.1-1.2% of
+the distance behind the depth buffer. The window is narrow because the depth
+buffer only knows front faces, and a ray passing behind a whole trunk isn't in
+its shadow.
+
+One step of a 24-bit depth buffer grows as z² over the near plane's distance.
+Scene 3's macro shots use a 4 mm near plane, and there the depth step outgrows
+that 0.1% a few metres out, so the far scene would shadow itself at random and
+speckle black under the jitter. So the contact shadows fade out between 1,000
+and 2,000 near-plane distances. That's 50-100 m in the jungle's wide shots,
+whose near plane is 5 cm, and 4-8 m in the macro. A march also stops at the
+screen's edge, where the clamped depth would shadow the borders. A separable
+depth-aware filter (=ao_blur.frag=) finishes the pass.
+
+*** Depth of field
+:PROPERTIES:
+:CUSTOM_ID: depth-of-field
+:END:
+
+The depth of field runs when =mc_post.dof= is above zero, focused at
+=mc_post.focus=. First the scene and each texel's signed circle of confusion
+are written to =dof_a= at quarter resolution, each texel a 4x4 box made from
+four bilinear taps. The circle is measured in the frame's pixels, and it's
+negative in front of the focus. Then a bokeh gather goes into =dof_b=, and the
+composite blends it in per pixel, so sharp pixels keep full resolution.
+
+The gather is a scatter-as-gather over a golden-angle spiral, after Dennis
+Gustafsson's single-pass bokeh. A tap counts if its own circle of confusion
+reaches this texel. Taps behind a sharper centre can't spread over it, so
+in-focus edges stay clean. The spiral reaches out to the largest circle of
+confusion there is (=mc_post.dof=, in the frame's pixels), so the bokeh keeps
+its size on screen at any internal resolution.
+
+Blending by the pixel's own circle of confusion alone would leave a blurred
+foreground with a hard, stepped outline wherever it stands over something
+sharp. That happens to a stem or a leaf in front of the in-focus ferns as the
+gaze comes down to the hero plant (about 185-187 s). So the gather also
+averages how much of what reaches the texel is foreground blurred by more than
+2 pixels, and keeps that in =.a= with the same running weights as the colour.
+The composite then blends by the larger of the pixel's own blur and five times
+the foreground's share, up to 1. In-focus edges are untouched, because a tap
+only counts if it is itself well out of focus. A leaf's own receding surface
+doesn't qualify, since its blur grows slower than one pixel per pixel.
+
+The spiral puts its taps about 3 texels apart, however far it reaches. A small,
+very bright point out of focus, like the sun in a dew drop beside the ladybug
+or the speculars on its raised wing cases, would only be caught by the
+receivers whose taps happen to land on it. It would come out as the spiral's
+own pattern of dots. So =dof_a= has mips. Where the buffer's mean two levels
+down (over 4x4 texels) is bright, a point of light is nearby, and a tap takes
+its colour from that mean instead, by a smoothstep of the mean's luma from 0.3
+to 1. The drop opens into a soft disc and the highlights into glows, and
+nothing else moves. Only bright points do this, because reading the mips
+everywhere would blur the half-blurred middle distance and bleed in-focus
+colour, such as the ladybug's red, into the bokeh behind it.
+
+Read through one bilinear fetch, that mean has square contours: the fetch's
+tents over the 4x4-texel blocks. A far drop's highlight would come out as a
+lumpy square, and a bright point at a receiver's own centre tap as a sharp dot
+in the middle of its bokeh. Both are dealt with where a tap's own circle of
+confusion is large (a smoothstep from 9 to 18 frame pixels) and the plain mean
+is already bright (luma over 0.3). There the mean is read through four bilinear
+taps half a texel off on the diagonals, which makes the contours round and the
+disc even. The centre tap is taken the same way there, so the dot goes. Smaller
+circles keep the single tap and the plain centre. That leaves the beach alone: its long lens
+stays under 8.5 pixels everywhere, and a wider mean would smear its bright surf
+into blotches.
+
+Under such a large circle the substitution also starts lower, ramping in from a
+4x4 mean of 0.15 to 0.45 instead of 0.3 to 1. A dim mote's mean peaks at
+0.5-0.6 and is mostly under 0.3, while the point itself reads 2-10. With the
+plain ramp, every ring tap that landed on it would take it raw, and the spiral
+would print as a rosette of dots. The 0.3 is there to keep in-focus colour out
+of the bokeh, and taps that far from focus can't carry any.
+
+*** The bright pass and the bloom
+:PROPERTIES:
+:CUSTOM_ID: the-bright-pass-and-the-bloom
+:END:
+
+The bright pass runs only when the bloom is on. It reads the HDR scene down to
+half resolution with four bilinear taps over each 4x4 block, each tap weighted
+by 1 / (1 + its luma). That's Karis's average, and it stops a lone sub-pixel
+glint that's on one frame and off the next from throwing a halo that flashes
+with it. The pass keeps only what's above the bloom threshold
+(=mc_post.bloom_thresh=), with a soft knee so it doesn't pop, and writes it to
+=bloom[0]=. Luminance uses the usual Rec. 709 weights.
+
+A pixel that isn't finite (a NaN or an infinity) is dropped here. Otherwise
+one stray pixel, from a zero normal somewhere in a scene, would spread down
+the bloom chain and come back as a black rectangle over a third of the frame.
+
+The bloom itself is a mip chain. The bright pass is halved down six levels,
+from half resolution to 1/64, with Jimenez's thirteen bilinear taps over each
+6x6 block. Those are a centre, an inner four and an outer ring, weighted into a
+wide, smooth falloff that doesn't alias as things move. Then the chain is
+climbed back up, each level spread by an exact 3x3 tent (four bilinear taps
+half a texel off on the diagonals) and added onto the level above. The pass
+knows it's going up from a negative =dir.x=. That gives a tight core with a
+wide, soft halo, as a real lens does, for ten cheap draws.
+
+Outside the bang, the flashes, the burn-out and the reveal, the bloom is mixed
+in at about 3%. The six levels are fixed, so a supersampled frame's halo is a
+little tighter on screen, which doesn't show in the bang or the burn-out.
+
+*** The composite
+:PROPERTIES:
+:CUSTOM_ID: the-composite
+:END:
+
+The composite is the grade, all in one fragment shader at the scene's size. It
+writes into =ldr= and runs these steps in order.
+
+It starts from the pixel with a little chromatic aberration (=mc_post.chroma=).
+Red and blue are each spread over a band of shifts, from half to all of the
+offset, with two taps a channel, the way a lens spreads each band of
+wavelengths. Shifting each channel whole would put sharp one-pixel red and cyan
+lines either side of fine detail such as the bark's grooves, and the TAA's
+sharpening would deepen them.
+
+Then comes camera motion blur. The shader works out where this pixel was last
+frame from its depth and the camera's move. It smears 0.17 of that motion each
+way, about a third of it in all, like a 120° shutter. The smear reaches at most
+the larger of =mc_post.blur= and 0.25% of the screen each way. That's 0.25% by
+default, so the seabed rushing by stays readable, and 1% through Scene 2's reef
+flight. There the close kelp and coral move 30-45 pixels a frame, and at 0.25%
+they'd keep sharp edges and step across the frame. The blur takes one tap per
+pixel of smear on each side, up to 16, and beyond that spreads the 16 taps over
+the reach, so its cost stays bounded. A frame with no history reprojects
+through its own camera, so it isn't blurred. Where the velocity isn't a number,
+as when no camera was given, there's no blur either, and the loop is bounded
+whatever arrives. A loop whose trip count is NaN may never end, and it can hang
+the GPU.
+
+Next the depth of field is blended in, but only on frames where it ran. A
+target nothing has drawn into holds whatever memory it was given. After a
+resize that can be half floats that aren't numbers, and a NaN times a zero
+weight is still NaN, so it would leave black blotches.
+
+The ambient occlusion and contact shadows follow, upsampled from half
+resolution with depth-aware weights. The AO applies only to the pixel's ambient
+share, and the contact shadows to the rest ([[#the-ambient-share][below]]).
+Both fade out in proportion to the depth of field's blur, because pixel-sharp
+shadows laid over a soft bokeh look like black specks.
+
+Then any light the caller hands over is added (=mc_post.vol_tex= times =vol=,
+upsampled), which is how Scene 3's volumetric shafts come in, and the bloom
+after it.
+
+Exposure and a filmic tonemap come next. The curve is ACES's (Narkowicz's
+fit), run on colours that are pulled a little toward grey first and pushed
+back out after. That's AgX's trick at half strength: the inset is halfway
+between identity and AgX's, and the outset is its exact inverse. Bright skies
+and the jelly keep their colour a little longer before they whiten, and
+pastels stay pastel. Applied per channel, the curve would skew the sky toward
+cyan and fire toward yellow.
+
+The rest of the grade is saturation around luminance, a split tone (cooler
+shadows, warmer lights) and a smooth vignette. Then comes the display's
+transform, a plain 1/2.2 power, because exact sRGB would darken the shadows on
+the 2.2-gamma displays the demo was graded on. Last come =fade= to black and
+=white=, which are how the demo fades to and from black and burns out to white
+between Scenes 2 and 3.
+
+*** The TAA
+:PROPERTIES:
+:CUSTOM_ID: the-taa
+:END:
+
+The TAA folds this frame's jittered samples into the history. The history is
+at the output size, so at 100% and below the TAA also upsamples. When the frame
+is supersampled, the history is at the frame's own size instead. The TAA then
+resolves the frame 1:1 as it would at 100%, except that its Catmull-Rom history
+fetch is finer, and the present filters the result down.
+
+A 3x3 Gaussian rebuilds the pixel's centre from the frame and sharpens it
+slightly, in its luma only. Sharpening each channel would deepen every colour
+fringe. The history is fetched through a sharp Catmull-Rom filter from where
+the point was last frame, found from its depth and the camera's move. Then it's
+clipped to the colours around the pixel now, the min/max box intersected with
+mean ± 1.5 σ, and that clip is what stops it ghosting.
+
+In a still picture each new frame is blended in at only 7%, times the nearest
+sample's closeness to the pixel centre, so an edge's jittered samples average
+out instead of shimmering. The new frame counts for more where the history had
+to be pulled in a long way, since that means something moved: up to 0.5 extra,
+by how many σ the clip moved the history. It also counts for more the faster
+the picture moves, up to 0.4.
+
+And it counts 0.8 where this point's depth falls outside last frame's depths in
+the 4x4 texels around where it was. That check takes four
+=textureGatherOffset= calls, made only where there is a history. There are no
+motion vectors for things that move on their own, so this depth test is what
+lets the history go quickly behind a bird or a hop instead of trailing. An edge
+whose depth merely flips under the jitter keeps its history, because its old
+depth is still among the sixteen. Cuts need no detection, because the clip and
+the depth test handle them.
+
+The reprojection, which takes this frame's clip space to the last frame's, is
+the last view-projection times the inverse of this one. =post.vert= computes
+the inverse once per vertex of the full-screen triangle and hands it to the TAA
+and the motion blur as a =flat= matrix. That's three inverses a pass, where one
+per pixel would cost about half a millisecond, and the payload needs no 4x4
+inverse of its own on the CPU.
+
+*** The present: downsampling, grain and dither
+:PROPERTIES:
+:CUSTOM_ID: the-present-downsampling-grain-and-dither
+:END:
+
+The present puts the history onto the output framebuffer with the film grain
+on top. The grain comes after the TAA, which would otherwise smooth it away.
+Its default amount is 0.012; the jungle uses 0.008 so fine leaves and distant
+sand stay quiet.
+
+A supersampled history is filtered down first, with four bilinear taps around
+the pixel's centre. They're offset by 0.6 of the amount by which an output
+pixel is wider than a history pixel. With the TAA's own Gaussian, that makes a
+filter 0.43-0.46 output pixels wide from 150% to 200%, as wide as the TAA's
+filter at 100%. So the extra samples give better edges and shading rather than
+a sharper picture that aliases. At 100% and below the present takes a single
+tap.
+
+The grain hashes cells of whole output pixels. A cell is as many pixels a
+side as the output has 1080s of lines: ~max(1, floor(lines / 1080 + 0.01))~.
+The line count comes from =uv='s step down one pixel, so =render.c= passes
+nothing for it. The grain is per pixel up to 2159 lines and 2x2 at 4K, which
+keeps it the size it has on the 1080p screen it was graded on. The cells are
+whole pixels because a fractional cell, such as 4/3 of a pixel at 1440 lines,
+makes some rows and columns two pixels wide and draws a fine plaid in flat
+areas.
+
+The hash's sums are written in an odd order, and a =fract(gl_FragCoord.y)=
+stands where the compiler can't fold it. That's the order Mesa's compiler gave
+the grain's earlier form, so at 1080 lines the hash sequence matches the one
+the show was graded with, on Mesa and a UHD 620. The current build uses a
+lower grain amount. Another compiler may round its own way.
+
+The grain stays noise at any resolution. It's added in the display's steps,
+with a film's response: strongest in the midtones (0.35 + 2.6 l (1 - l)) and
+gentle in the shadows. Added to linear light, it would move dark pixels a dozen
+steps either way each frame, and the dark areas would boil. It's also
+high-passed, as a pixel's hash minus the mean of its right and upper
+neighbours', so it has no blotches. And it's re-seeded 24 times a second, as
+film is, which about halves its frame-to-frame fizz.
+
+Last, the 8-bit write is dithered, whatever the fade. The grain fades out with
+the picture, so without the dither every fade to black, the burn-out to white
+and the reveal out of it would be quantised with no noise at all. A glow fading
+out would come apart in rings one step apart, as in Scene 1's last second or
+the beach's sky during the final fade. The dither is triangular, one step
+either way, and uses two more hashes of the grain's seed, so it's re-seeded
+along with the grain. It shrinks to nothing within a step of pure black or pure
+white, so those stay pure, where a plain one-step dither would lift an eighth
+of a black screen to 1. It needs =ldr= in half floats: with an 8-bit =ldr= the
+rings would reach the history already quantised, and the dither would only make
+them noisier. Mid-show it adds under 1% to the picture's finest texture.
+
+** The ambient share
+:PROPERTIES:
+:CUSTOM_ID: the-ambient-share
+:END:
+
+A pixel's light is part sun and part sky, and ambient occlusion only applies to
+the sky's part, since a sunlit patch of floor under a leaf shouldn't grey over.
+So scene shaders write the ambient share of the pixel's radiance (0..1) in
+alpha, and the composite applies
+~col *= a * mix(1, ao, ssao) + (1 - a) * contact~. Scenes 1 and 2 write 1, so
+there the AO applies to everything and there are no contact shadows. Scene 3's
+lighting writes the true share, and additive passes leave alpha alone.
+
+** Full-screen passes, fixed uniforms and GL state
+:PROPERTIES:
+:CUSTOM_ID: full-screen-passes-fixed-uniforms-and-gl-state
+:END:
+
+Each of the post passes is a single =mc_fullscreen_triangle()=: one triangle
+big enough to cover the screen, its vertices computed from =gl_VertexID=, with
+no vertex buffer at all. Core-profile GL still insists that a VAO is bound, so
+the GL context owns one empty VAO for the purpose, created lazily and deleted
+before the context is torn down. The engine supports one current engine context
+at a time, and reopening it can't reuse an old context's object name.
+=tiny64.h= draws its full-screen passes with the same trick.
+
+Nothing is looked up by name. The post passes' parameters ride in one std140
+block, =Post=, which =mc_renderer_end= uploads once a frame, once the scene is
+drawn, into the same uniform buffer as the demo's Frame block
+(=mc_gl_frame_block=, binding 0). The passes' few uniforms of their own, such
+as a blur's direction, and every texture unit are fixed in the GLSL with
+=layout(location)= and =layout(binding)=, so the renderer sets no unit and
+fetches no location. The demo does the same with every uniform it sets, and
+that's the convention for new code. Each uniform gets a location that's unique
+in its program (an array takes consecutive locations), every sampler not on
+unit 0 gets a binding, and the C side sets them by number.
+
+GL's switches work the same way: =mc_gl_switch(bits)= sets the depth test,
+depth writes, culling and blending in one call, with two bits each (leave, on,
+off). The public header documents the GL state that the passes own. Callers
+must leave scissor, stencil and polygon offset disabled, and leave full colour
+writes and fill mode on.
+
+** Passes of your own
+:PROPERTIES:
+:CUSTOM_ID: passes-of-your-own
+:END:
+
+The caller can add its own passes to a frame. Between =mc_renderer_begin= and
+the lit draws it can bind a target of its own, draw into it, and call
+=mc_renderer_bind_scene=, which hands the framebuffer back to the HDR target.
+=mc_renderer_depth= and =mc_renderer_color= hand out the scene's depth texture
+and the picture drawn so far. =mc_renderer_blur= is the renderer's depth-aware
+filter, for a buffer of one's own at half or quarter resolution. The demo uses
+all of them.
+
+Scene 2's sun shadow map is one such pass. The demo binds its own depth-texture
+FBO, renders the big casters from the light's point of view, and hands the
+framebuffer back. The lit shaders sample that depth texture in compare mode,
+with 3x3 taps of bilinear PCF. Scene 2 redraws the map on every frame that
+draws the sea below, starting with the first frame of the crossing. Its object
+shader, which draws the bubbles, the eyes and the marine snow, reads the map
+whatever the realism ramp says.
+
+Scene 1 and the end card borrow the same map for their key light, since they
+never share a frame with Scene 2. =s1_draw= draws the shapes into it before
+=mc_renderer_begin=, which hands the framebuffer back, so no =shadow_end= is
+needed. [[file:making-of.org::#lighting-object-frag][Scene 1's lighting]] tells how
+the glass casts a third of a shadow there. The scenes' depth passes share
+=shadow_begin= and =shadow_end= in =main.c=, as all three scenes share
+=camera_vp=, =frame_basics= and =post_depth=.
+
+The jelly blob is a clear ball lens. It casts no shadow, but it focuses the
+sun, and =uwsurf.frag= works out its caustic from the ball's centre and radius,
+which ride in the Frame block's =uGlow= and =uGlowAmt=. Each scene gives that
+block's fields its own meanings, and where two uses meet, the block is sent
+again between draws. Scene 2 re-sends it with =uGlowAmt= 0 before it draws its
+bubbles, eyes and marine snow with Scene 1's object shader, whose glow light
+reads the same two fields. Scene 1 uses =uAtmo=, Scene 2's sky ramp, for its
+bang's shock front and the dark of its outro. So the end card, which draws
+through the same =s1_draw=, sets =uAtmo= back to 1 itself instead of relying on
+whatever ran before it.
+
+Scene 2's dive into the sea is another custom pass. For the 0.34 s the lens
+takes to go under, a frame first draws the sea above and copies the picture to
+a texture (=jelly_copy=, unit 9). Then it clears, draws the sea below, and lays
+the sea above back over it, above a waterline that sweeps up the lens
+(=dip.frag=). The frame builds its first camera, the one the TAA and the motion
+blur follow, from the sea below, so that it matches the depth buffer.
+
+The jellies of Scenes 2 and 3 and Scene 1's glass bodies are drawn last, and
+they look through that same copy. The copy is always the whole frame, one
+=glCopyTexSubImage2D=. Scene 2's ball lens reads up to about 2.3 radii from its
+centre, so a rectangle round the ball would be most of the frame anyway.
+=s1_shapes= sorts each shape type's glass to the end of its instances and draws
+the two ranges separately, with =mc_mesh_draw_instance_range=. The instances
+are uploaded once a frame, by the first of its four passes. In Scene 2,
+whatever must not be in the copy draws after the jelly: the bubbles, the blob's
+eyes and the marine snow. The making-of's Scene 2 section,
+[[file:making-of.org::#what-draws-it][What draws it]], has that order and the
+depths the jelly writes.
+
+The copy's texture is made again when the renderer's size changes. Scene 2
+checks for that on its first frame, which is near-black, so the re-allocation
+(37 MB at 1620 lines) doesn't land on the dip in full view.
+
+Scene 3 runs passes of its own too. It has three sun maps: one round the
+clearing and one round the beach, drawn once, and a third, drawn every frame,
+tight round the character on show. It marches its light shafts at quarter
+resolution into a target of its own, reading the scene's depth through
+=mc_renderer_depth=. It smooths them with =mc_renderer_blur= and hands them to
+the composite as =mc_post.vol_tex=. Its atmospheric sky and thin horizon
+wisps come from a 64x32 radiance table, also sampled by the sea and wet sand for their sky
+reflections. There are no cloud history targets, jungle dust particles or
+screen-space reflections of nearby objects in the current build.
+[[file:making-of.org::#how-it-put-together][How it's put together]] and
+[[file:making-of.org::#light-s3-light-c-jl-and-the-engine-post][Light]], in the
+making-of's Scene 3 section, have the details.
+
+** Internal resolution and supersampling
+:PROPERTIES:
+:CUSTOM_ID: internal-resolution-and-supersampling
+:END:
+
+The scene targets run at an internal percentage of the output, from 25% to 200%,
+set with =mc_renderer_set_scale= (100% when the renderer is made). Presentation
+and the camera's aspect follow the renderer's output size, which
+=mc_renderer_resize= sets. The TAA resolves the internal-resolution samples
+into its output-size history or, above 100%, into one at the frame's size for
+the present to filter down. =mc_renderer_end= centres that output in the
+framebuffer it's handed, with opaque black around it when the framebuffer is
+larger.
+
+The windowed main uses both the output size and the scale. Every frame it sizes
+the renderer to the largest 16:9 rectangle in the window (=demo_fit=, which the
+load's warm-up shares), such as 1920x1080 on a 1920x1200 or a 2560x1080
+screen. Every shot is composed for 16:9, including the two trunks that frame the
+beach, so on a screen of another shape the picture is letterboxed or
+pillarboxed and the camera keeps its aspect.
+
+The windowed main also supersamples by lines, not by a percentage. Scene 1 and
+the end card, the cheap frames, render 2160 lines, and Scenes 2 and 3 render
+1620. That's 200% and 150% of a 1080p picture, or 100% and 75% of a 4K one, so
+a 4K screen gets the same frames instead of four times the work. It never goes
+past 200%, and a picture under 1080 lines gets the percentages a 1080-line one
+does. The scale switches on the near-black cuts at either side, and a resize
+starts the TAA's history over anyway.
+
+=MC_RENDER_SCALE= fixes one percentage, 25-200, for the whole show, and 80
+suits an integrated GPU. The headless main and =tools/verify.py= keep one size
+and scale throughout, 960x540 at 80% by default. The capture main renders
+1920x1080 frames at one scale for the whole show (=MC_CAP_SCALE=, 200 by
+default, so every frame comes from 2160 lines). The GTAO and bloom sample
+counts are compile-time constants in their shaders.
+
+** Where the post shaders live
+:PROPERTIES:
+:CUSTOM_ID: where-the-post-shaders-live
+:END:
+
+The post shaders live in =src/shaders/= and are baked into the generated
+=mc_engine_shaders.h=, which =render.c= includes, so they ship inside the
+engine instead of as loose files. In release they're minified together with the
+demo's shaders, and in dev they're kept verbatim
+([[file:pipeline.org::#genshaders-py-bake-shaders-into-headers][=genshaders.py=]]).
+The demo's scene shaders are separate (=demos/hello-world/shaders/=), because
+they belong to the demo, not the engine.
+
+* From Enter to the first frame
+:PROPERTIES:
+:CUSTOM_ID: from-enter-to-the-first-frame
+:END:
+
+The release is one file. When you run it, its launcher decodes the payload in
+memory, which takes under two seconds, and runs it
+([[file:pipeline.org::#mkelf-sh-pack-py-cm-h-s2dec-s-mcstub-c-s1dec-s-the-elf-self-extractor][the self-extractor]]).
+From there it's ordinary C: =main= opens the window, the demo loads, and the
+music starts the show.
+
+** Three mains
+:PROPERTIES:
+:CUSTOM_ID: three-mains
+:END:
+
+There are three mains, chosen at compile time. The windowed main runs the show
+in real time. In the release it's fullscreen with a 16:9 picture inside, and
+the screen is black from the moment the window opens, because one cleared frame
+is swapped in before the load. =-DMC_HEADLESS= swaps in a main that dumps a PNG
+for each key moment of the show, at 960x540, and quits. Only =main.c= reads
+that macro, and the engine never does, so a headless build also links the
+surfaceless backend.
+
+=-DMC_CAPTURE= swaps in one that renders the whole show offline at 1920x1080
+and 60 fps and streams raw RGBA frames to stdout, ready to pipe into ffmpeg. It
+renders every frame from 2160 lines unless =MC_CAP_SCALE= picks another
+percentage, 25-200, and =MC_CAP_DUR= can cut the show short. With
+=MC_CAP_AUDIO= it writes the soundtrack to a file instead. It's built headless,
+on the surfaceless backend. =make capture=
+builds it and records the show with it (=tools/capture.sh=, and
+[[file:pipeline.org][the pipeline doc]] has the recipe).
+
+** The load
+:PROPERTIES:
+:CUSTOM_ID: the-load
+:END:
+
+The load is everything =demo_make= does before the show. It makes the renderer
+and the demo's 32³ noise volume, which the bakes and the seabed's placement
+read. Then it builds the procedural meshes and Scene 1's bodies and logo,
+compiles every shader, sculpts the animals and bakes Scene 2's materials. It
+places the seabed's props and makes Scene 3, with its baked tiles, the far
+forest's impostors and the tyrannosaurus. With a warm shader cache that takes
+about a second on a UHD 620. The load's last step is the warm-up below, and the
+music starts only after it.
+
+** The warm-up
+:PROPERTIES:
+:CUSTOM_ID: the-warm-up
+:END:
+
+A driver may finish building a program only at its first draw, and Mesa's Intel
+driver builds it again there if the target is of another kind
+(~INTEL_DEBUG=perf~ logs "Recompiling fragment shader"). Other first uses cost
+time too, such as the glass's copy of the picture (66 MB at 4K inside) and the
+targets sized to the picture. Left to the show, those first uses would drop
+frames with a cold shader cache: at the show's first frame, at the bang, where
+the glass first goes into the key light's map, and under Scene 3's white.
+
+So the windowed main's last step before the music, =demo_warm=, draws eight of
+the show's frames without showing them. It draws them at the sizes the show
+uses (=demo_fit=), at half bars 64, 72, 95, 105, 162, 227, 246 and 38, and in
+that order they cover:
+
+- the planet and its moon (61.9 s);
+- the dip: both seas, the waterline, the milky blob, its bubbles and the
+  occlusion (69.7 s);
+- the whale overhead (91.9 s);
+- the reef: weed, fish, coral, boulders, their sun map, the jelly and the moon
+  jellies (101.6 s);
+- Scene 3's first light: the forest, its sun maps, the sky, the shafts, the
+  birds and the ladybug (156.8 s);
+- the tyrannosaurus, the beach and the sea (219.7 s);
+- the blob ashore, its sun map and the depth of field (238.1 s);
+- and Scene 1 last (36.8 s), which leaves the renderer at the size the show
+  opens with.
+
+A scan of that earlier version at 60 fps, with the GL calls instrumented,
+found 47 programs drawn in 56 pairings of program, kind of target and blending.
+Those counts predate the removal of the cloud, dust and reflection programs.
+The eight warm-up frames cover the scenes' different targets and blending.
+No two of the planet, the dip,
+the whale in view and the coral are ever on screen together, and the same goes
+for the birds, the tyrannosaurus and the blob's depth of field. The frame at
+156.8 s also draws Scene 3's two still sun maps, which the show then keeps.
+They're drawn with the world as the show has it in the white's last half
+second, whichever frame draws them, so they are the show's own.
+
+Afterwards, anything later frames read is put back as the load left it, so the
+show draws the same frames it would have drawn without the warm-up. That means
+the Frame block (Scene 1 sets only its own terms) and the boulders' detail
+levels, which have hysteresis. The TAA's history needs nothing. The show's
+first frame comes earlier in the clock than the last warm-up frame, and a
+step back in the clock starts the history over. A caller starting within a
+quarter second after 36.8 s would carry it on, but this main, the only caller,
+never does. The warm-up doesn't run Scene 1's collision sim, so
+the shapes it draws stand where they start. The audio, whose clock is the
+picture's, starts after the warm-up (=mc_audio_start= publishes t = 0), so the
+show still starts at 0 s with the music.
+
+The warm-up adds about a second to the load with the cache warm, and 1.2-2.1 s
+cold. The show's first frame gives about 0.2 s of that back, because the
+renderer's targets already exist. With a cold cache no program is rebuilt
+during the show, and the four rebuilds Mesa still makes all happen in the load.
+On a UHD 620 with a cold cache, each event frame's excess over the median of
+its ten neighbours on either side (median of 3 runs) is -9 ms for the first
+frame and +15 ms for the bang. The frame under Scene 3's white that draws the
+still maps comes to +70 ms. The dip's +26-29 ms is its own cost (two seas and
+the copy), and the ladybug, the tyrannosaurus and the blob stay within 15 ms.
+
+* Cameras, tracks and beats
+:PROPERTIES:
+:CUSTOM_ID: time-cameras-and-rhythm
+:END:
+
+=scene.c= is small. An =mc_camera= is a position, target and up vector plus
+fov, near and far, and =mc_camera_view= and =mc_camera_proj= turn it into
+matrices. =mc_frustum_make= takes the six planes out of a view-projection
+matrix, and =mc_frustum_sphere= tests a bounding sphere against them, which is
+how the demo culls. Keyframe tracks (=mc_track_f=, =mc_track_v3=) interpolate
+hand-authored curves of a value over time, with a choice of easing per key.
+
+The timeline helpers phrase time musically. Given an
+=mc_timeline { t, duration, bpm }=:
+
+- =mc_beats= converts seconds to beats, so you can phrase animation in musical
+  time instead of wall-clock seconds.
+- =mc_beat_pulse= is a 0..1 pulse that peaks on each beat, for anything that
+  should bounce. The demo doesn't use it, because a hard pulse makes motion
+  stutter. Scene 1 runs a plain sine of =mc_beats= instead, which only makes
+  the glow and the bloom shimmer.
+- =mc_window_active= and =mc_window_phase= gate and normalise a sub-range.
+  Scene 1 uses =mc_window_phase= for its collapse, a 0..1 progress from
+  =T_COLLAPSE= (44.6 s) to =T_BLACK= (49.2 s).
+
+None of this keeps time by itself: it's handed a time. Where that time comes
+from, and how it stays on the music, is covered in [[#timing][Timing]]. The
+[[file:toolkit.org::#mc-scene-h-camera-tracks-timeline][toolkit reference]] has
+the calls.
+
+* Sound from nothing
+:PROPERTIES:
+:CUSTOM_ID: sound-from-nothing
+:END:
+
+The soundtrack is computed, not played back. =synth.c= is a small software
+synth: give it a buffer and a frame count, and it fills the buffer with
+interleaved stereo floats in =[-1, 1]= and advances its own clock. It uses no
+samples. Every voice is built from oscillators, envelopes, filters and noise,
+with a ping-pong delay and a stereo feedback-delay-network reverb, and a master
+bus with a kick-driven sidechain pump and a peak limiter. The seed only jitters
+incidental detail, such as start phases and detune, so a given seed renders the
+same song down to the bit, in blocks of any size.
+
+The song is a few small tables in the same file: the chord progressions, the
+step patterns, and an arrangement of ramps for each section. It runs 144 bars
+at 124 BPM, in four movements and a coda, with one or two movements to each
+scene. [[file:making-of.org::#the-soundtrack][The soundtrack]] describes the music, the voices and
+the reverb, and how to change them.
+
+=audio.c= plays it. It starts a thread that pulls blocks of 1,024 frames from a
+callback and writes them to ALSA, which it opens nonblocking with 100 ms of
+latency. If ALSA won't open, or a write fails for good, the thread carries on
+in silence, paced against absolute deadlines, and the demo keeps running. The
+callback is real-time code: =mc_synth_render= doesn't allocate, do I/O or take
+locks. The thread holds on to each block until the device has taken all of it,
+and it recovers from an underrun with =snd_pcm_prepare=. The main thread stops
+it by clearing an atomic flag and joining it. The release payload never does
+that: it exits, and the OS ends the thread.
+
+The thread also publishes the playback position, which =mc_audio_time()= turns
+into the demo's master clock (see [[#the-master-clock][The master clock]]).
+
+* Timing
+:PROPERTIES:
+:CUSTOM_ID: timing
+:END:
+
+The picture is timed by the music. One clock, the song's playing position,
+drives every scene, and every scene is a whole number of the song's bars. This
+section covers the clock, the scene boundaries, the two stretched clocks that
+Scenes 2 and 3 are choreographed on, and the constants that tie the picture to
+the music in =src/synth.c=.
+
+Times in these docs are given in one of four clocks:
+
+- Show time is the seconds since the song's first sample. The timeline tables
+  use it.
+- Scene-local time is the seconds since a scene began. It's what
+  =render_scene2= and the other scene functions are handed.
+- Scene 2's story seconds come from =uw_u()=.
+- Scene 3's jungle seconds are =c->j=.
+
+The last two are stretched against show time, as described below.
+
+** The master clock
+:PROPERTIES:
+:CUSTOM_ID: the-master-clock
+:END:
+
+The windowed main reads the clock once a frame, at the top of its loop. With
+audio it's =mc_audio_time()=, the position of the sample that's being heard.
+After each write to ALSA, the audio thread takes the frames submitted so far,
+subtracts the delay the device reports, and publishes the result with a
+timestamp from the monotonic clock. =mc_audio_time()= adds the time since that
+stamp. It never runs past the audio already submitted and never goes
+backwards. It reads 0 until the device starts playing, which happens once its
+100 ms buffer is full.
+
+If ALSA won't open, or a write fails for good, the thread keeps rendering the
+song and throws it away, sleeping to absolute deadlines on the monotonic clock.
+The clock then runs at the pace the music would have played. If the synth
+can't be created at all, there's no audio thread, and the main falls back to
+the wall clock (=mc_time_seconds()= since the start).
+
+The picture follows the sound, never the other way round. When a frame runs
+long, the next one jumps to where the music is, because a dropped frame is much
+easier to forgive than a stutter in the audio. Nothing else syncs the two:
+there are no cues passed between the threads, only the shared clock. The music
+starts after the load and its warm-up frames (see
+[[#the-renderer-and-its-post-stack][above]]), so show time 0 is the song's
+first sample.
+
+The clock is monotonic and never wraps. The main clamps it at =TOTAL_DUR= and
+hands it to =render_frame=, which picks the scene. When the clock reaches the
+end, the release build exits, and the dev build stops the music once and holds
+on a black frame.
+
+The other two mains have no audio clock. The capture main renders frame /n/ at
+exactly /n/ / 60 s, and writes the soundtrack separately (=MC_CAP_AUDIO=) from
+the same synth and seed, so the two line up exactly when they're muxed. The
+headless main renders a fixed list of show times.
+
+** Show time and the scenes
+:PROPERTIES:
+:CUSTOM_ID: show-time-and-the-scenes
+:END:
+
+The song is in 4/4 at 124 BPM throughout, so a bar (=BAR_S=, 240 / =BPM=) is
+1.935 s. Each scene starts on the first bar of its music and lasts a whole
+number of bars:
+
+| Part     | Song bars | Show time     | Length            | Music                | In =main.c=                  |
+|----------+-----------+---------------+-------------------+----------------------+------------------------------|
+| Scene 1  | 0-26      | 0-50.3 s      | 26 bars, 50.3 s   | the first movement   | =SCENE1_DUR= (=DUR=)         |
+| Scene 2  | 26-80     | 50.3-154.8 s  | 54 bars, 104.5 s  | the second and third | =SCENE2_START=, =SCENE2_DUR= |
+| Scene 3  | 80-139    | 154.8-269.0 s | 59 bars, 114.2 s  | the fourth           | =SCENE3_START=, =SCENE3_DUR= |
+| End card | 139-144   | 269.0-278.7 s | 5 bars, 9.7 s     | the coda             | =SCENE4_START=, =SCENE4_DUR= |
+| The show | 0-144     | 0-278.7 s     | 144 bars, 278.7 s |                      | =TOTAL_DUR=                  |
+
+=render_frame= hands each scene its local time, the show time minus the
+scene's start. Scene 1's cues are bars of the song. Its section starts,
+=T_BANG=, =T_HOOKA=, =T_BREAK=, =T_HOOKB= and =T_OUTRO=, are bars 4, 8, 12, 16
+and 23. The moments of its story, such as =T_LOGO_IN=, =T_COLLAPSE=, =T_BLACK=
+and =T_WINK=, are offsets in seconds from those. The end card counts beats from
+its start. Scenes 2 and 3 are choreographed on clocks of their own, described
+below.
+
+No hand-off shows a cut. Scene 1 is black round its seed by =T_BLACK= (49.2 s),
+and the seed, by then a star, ends where Scene 2's sun rises. Scene 2 burns out
+to white over its last 2.5 s (=S2_END_FADE=). Scene 3 holds the white for a bar
+(=S3_J0=) and opens out of it over 2.4 jungle seconds (=S3_REVEAL=). It fades
+to black over its last 2 s (=S3_OUT=). The end card fades up over its first
+beat and out over its last three, as the coda dies away.
+
+** Defined twice: main.c and synth.c
+:PROPERTIES:
+:CUSTOM_ID: defined-twice-main-c-and-synth-c
+:END:
+
+The tempo and the song's layout are written down twice: for the picture in
+=demos/hello-world/main.c= and =scene3.c=, and for the music in =src/synth.c=.
+Neither is derived from the other, and nothing checks that they agree. If you
+change one, change the other to match, or the picture slides off the music from
+that point on.
+
+| What                   | Picture (=main.c=, =scene3.c=)                                              | Music (=synth.c=)                                                                   |
+|------------------------+-----------------------------------------------------------------------------+-------------------------------------------------------------------------------------|
+| The tempo              | =BPM= (124), and =BAR_S= = 240 / =BPM=                                      | =SONG_BPM= (124), with 16 steps to the bar                                          |
+| Scene 1's sections     | =T_BANG=, =T_HOOKA=, =T_BREAK=, =T_HOOKB=, =T_OUTRO=: bars 4, 8, 12, 16, 23 | =BARS_INTRO=, =BARS_BUILD=, =BARS_HOOKA=, =BARS_BREAK=, =BARS_HOOKB=: 4, 4, 4, 4, 7 |
+| Scene 1's length       | =DUR=, which is =SCENE1_DUR=: 26 bars                                       | those plus =BARS_OUTRO= (3), so =BAR_SCENE2= is 26                                  |
+| Scene 2's dive, breach | =S2_SPACE_END= (5 bars), =S2_BREACH= (10 bars)                              | =BARS_S2_SPACE= (5), =BARS_S2_DIVE= (5), so =BAR_S2_SPLASH= is 36                   |
+| Scene 2's length       | =SCENE2_DUR=: 54 bars                                                       | =BARS_SCENE2= + =BARS_SCENE3=: 18 + 36                                              |
+| Scene 2's stretch      | =S2_SEG='s first three part changes: song bars 44, 51, 60                   | =BAR_SCENE3=, =BAR_S3_PEAK=, =BAR_STALK=                                            |
+| Scene 3's white        | =S3_J0=: one bar                                                            | =BARS_WHITE= (1), so =BAR_WOODS= is 81                                              |
+| Scene 3's length       | =SCENE3_DUR=: 59 bars                                                       | =BARS_JUNGLE=: =BARS_WHITE= + 58                                                    |
+| Scene 3's cues         | the cue table, =S3_SEG=, =S3_HOLD=                                          | =SEC_BAR='s =BAR_WOODS= + /n/ rows, the footfalls (+31), hops (+42), splashes (+48) |
+| The end card           | =SCENE4_DUR= (5 bars), =END_LAND=                                           | =BARS_END= (5), =END_MEL=                                                           |
+
+In =synth.c= the =S3_= and =SCENE3= names belong to the third movement, Scene
+2's finale, and not to the demo's Scene 3. The jungle's cues are counted there
+in bars of the song after =BAR_WOODS=, bar 81, where =S3_J0= ends the white. So
+they include Scene 3's stretch and its hold.
+
+The jungle's shaders can't see the C constants, so they carry their timing as
+literals. =s3j0= in the shared block is one bar (1.9354839). The blob's shaders
+subtract the hold as 7.7419355, four bars, and the surf's phase has it as
+6.9677419. Some cues are written as literal jungle seconds too, such as the
+tyrannosaurus's prints in =ju_ground.frag=. A new tempo or a moved cue has to
+be carried into the GLSL by hand. How to change the music itself is in
+[[file:making-of.org::#the-soundtrack][The soundtrack]].
+
+** Stretched clocks
+:PROPERTIES:
+:CUSTOM_ID: stretched-clocks
+:END:
+
+Scenes 2 and 3 are each choreographed on a story clock of their own and played
+stretched. The story is counted in story bars, and the show gives some of its
+parts more bars of the song than the story has. A slow part, such as a look
+round or a ladybug's walk, plays a little slower and lasts longer, while the
+music keeps its tempo. =stretch()= in =main.c= does the conversion for both
+scenes.
+
+Its table lists the parts in order as pairs: bars of the show, then bars of the
+story. A pair of 8 and 7 plays seven story bars over eight bars of the song, at
+7/8 pace. A 0 ends the table, and the last pace holds on after it.
+=stretch(y, seg)= takes /y/, bars of the show since the act's origin, and
+returns bars of the story. =unstretch()= goes the other way, by bisection.
+
+The pace never changes in a step. Each change is eased linearly over half a
+bar, from a quarter bar before the part's boundary to a quarter bar after it,
+and the story clock is the integral of that pace. So nothing on screen changes
+speed with a jolt. Outside that half bar, the clock is exactly the
+piecewise-linear one, which gives two guarantees:
+
+- Each part starts on the bar of the song and the story bar its table gives,
+  within 30 ms at the boundary itself.
+- In a part played one for one, every bar line of the song is a bar line of
+  the story, so whatever the story times to the beat lands on the music's
+  beat.
+
+** Scene 2's story clock
+:PROPERTIES:
+:CUSTOM_ID: scene-2-story-clock
+:END:
+
+Scene 2 runs on its local time until the breach. The underwater act, from
+=S2_BREACH= to the end of the scene, is choreographed on a story clock.
+=uw_u(t)= turns scene-local seconds into story seconds since the breach, and
+=uw_t(u)= turns them back. The blob's path, the scatter of the props, the
+predator, the cameras and every cue of the act (=ENC_IN=, =PANIC_IN=,
+=TRANS_IN=, =FLIGHT_IN= and the rest) are written in story seconds. The whole
+story is =UW_SPAN=, 104.5 story seconds, divided into 40 story bars of
+=UW_BAR=, 2.6125 s.
+
+A story bar isn't the song's bar. It's 2.6125 story seconds long and plays over
+at least one bar of the song, 1.935 s. So even in a part played one for one,
+story seconds pass 1.35 times as fast as the show's. Treat a story time as a
+place in the act, not a length of time, and convert it with =uw_t()= before
+you compare it with the music.
+
+The act's 44 bars of the song hold its 40 story bars. =S2_SEG= splits them into
+six parts, the first three at the music's section changes:
+
+| Part                                | Song bars | Story bars | Pace    |
+|-------------------------------------+-----------+------------+---------|
+| The deep                            | 36-44     | 0-7        | 8 for 7 |
+| The clearing, in the third movement | 44-51     | 7-13       | 7 for 6 |
+| The anthem, up to the predator      | 51-60     | 13-21      | 9 for 8 |
+| The stalk and the chase             | 60-66     | 21-27      | 6 for 6 |
+| The transformation                  | 66-71     | 27-31      | 5 for 4 |
+| The flight and the burn-out         | 71-80     | 31-40      | 1 for 1 |
+
+The stalk and the chase play one for one so that the heartbeat's kick stays on
+the near miss. =ENC_PEAK=, at 64 story seconds, lands at 122.9 s, on the third
+beat of bar 63.
+
+Only the choreography is stretched. In Scene 2 the Frame block's =uTime= is
+scene-local seconds, so the water, the fish's swimming and everything else that
+simply moves runs at the show's own speed. The shaders that need the story,
+such as the reef bed and the big school, get =uw_u()= of the frame's time in a
+uniform.
+
+** Scene 3's jungle clock
+:PROPERTIES:
+:CUSTOM_ID: scene-3-jungle-clock
+:END:
+
+Scene 3 is choreographed in jungle seconds, counted from the end of the white.
+Its cues, from =S3_UP= at 7 bars to =S3_END= at 54, are written as whole bars
+of =BAR_S=, so a jungle bar is as long as the song's bar.
+
+=render_scene3= stretches the time once, at its top. The scene-local time /t/
+becomes =S3_J0 + BAR_S * stretch((t - S3_J0) / BAR_S, S3_SEG)=, and =s3_setup=
+sets =c->j= to that minus =S3_J0=. The Frame block's =uTime= gets the stretched
+time too, so every package and every jungle shader sees story time, and a
+shader gets jungle seconds as =uTime - s3j0=. The look round's pace applies
+before it as well, so during the white =c->j= runs from -1.69 to 0. The jungle
+is drawn under the white, unseen, from -0.5, the white's last 0.57 s.
+
+=S3_SEG= stretches the forest. From the beach's hush on, the story runs one
+for one, four bars behind the song:
+
+| Part                           | Song bars | Jungle bars | Pace    | Ends on    |
+|--------------------------------+-----------+-------------+---------+------------|
+| The look round                 | 81-89     | 0-7         | 8 for 7 | =S3_UP=    |
+| The canopy                     | 89-94     | 7-11        | 5 for 4 | =S3_FIND=  |
+| The way down to the hero plant | 94-97     | 11-14       | 3 for 3 | =S3_MACRO= |
+| The ladybug                    | 97-105    | 14-21       | 8 for 7 | =S3_FLY=   |
+| The take-off                   | 105-107   | 21-23       | 2 for 2 | =S3_ROAM=  |
+| The glide                      | 107-111   | 23-26       | 4 for 3 | =S3_GAP=   |
+| The beach, to the end          | 111-139   | 26-54       | 1 for 1 | =S3_END=   |
+
+From bar 111 on, show time is =SCENE3_START= + =S3_J0= + four bars + =j=, which
+is 164.516 s + =j=.
+
+=S3_HOLD= is a pause written into the cues, not a stretch. As the
+tyrannosaurus turns away and resumes walking (=S3_SHORE=, 31 jungle bars), the
+camera stays crouched for four more bars. Every later cue is its bar plus
+=S3_HOLD=: =S3_CLEAR=, =S3_BLOB=, =S3_END= and the blob's first hop (=JO_HOP0=
+in =s3_blob.c=). The blob's and the surf's shaders count their own cues from
+before the hold and subtract it as a literal. So a change to =S3_HOLD= moves
+Scene 3's length, the synth's later cues and those shaders, all together.
+
+** The main beats in show time
+:PROPERTIES:
+:CUSTOM_ID: the-main-beats-in-show-time
+:END:
+
+| Show time | Song bar | Beat                                         | Set by                    |
+|-----------+----------+----------------------------------------------+---------------------------|
+| 0.0 s     | 0        | Scene 1 opens on the seed (the intro)        |                           |
+| 7.7 s     | 4        | the bang, on the first kick (the build)      | =T_BANG=                  |
+| 15.5 s    | 8        | hook A                                       | =T_HOOKA=                 |
+| 23.2 s    | 12       | the breakdown                                | =T_BREAK=                 |
+| 31.0 s    | 16       | hook B                                       | =T_HOOKB=                 |
+| 32.7 s    |          | the logo assembles                           | =T_LOGO_IN=               |
+| 44.5 s    | 23       | the outro, and the collapse from 44.6 s      | =T_OUTRO=, =T_COLLAPSE=   |
+| 49.2 s    |          | black round the seed                         | =T_BLACK=                 |
+| 50.3 s    | 26       | Scene 2: space (the second movement)         | =SCENE2_START=            |
+| 60.0 s    | 31       | the dive                                     | =S2_SPACE_END=            |
+| 64.9 s    |          | through the cloud deck                       | =S2_CLOUDFLASH=           |
+| 69.7 s    | 36       | the breach: under the water                  | =S2_BREACH=, story 0 s    |
+| 85.2 s    | 44       | the clearing, as the third movement begins   | story 18.3 s              |
+| 98.7 s    | 51       | the anthem's peak                            | story 34.0 s              |
+| 116.1 s   | 60       | the stalk's heartbeat                        |                           |
+| 117.0 s   |          | the predator comes out of the murk           | =ENC_IN=, story 56 s      |
+| 122.9 s   |          | the near miss                                | =ENC_PEAK=, story 64 s    |
+| 123.9 s   | 64       | the chase, with the full anthem              |                           |
+| 129.1 s   |          | the transformation                           | =TRANS_IN=, story 72 s    |
+| 139.7 s   |          | the flight                                   | =FLIGHT_IN=, story 84 s   |
+| 149.0 s   | 77       | the third movement's outro                   |                           |
+| 152.3 s   |          | the burn-out to white                        | =S2_END_FADE=             |
+| 154.8 s   | 80       | Scene 3: the white (the fourth movement)     | =SCENE3_START=            |
+| 156.8 s   | 81       | the jungle opens                             | =S3_J0=, jungle 0 s       |
+| 172.3 s   | 89       | up to the canopy                             | =S3_UP=, jungle 13.5 s    |
+| 181.9 s   | 94       | down and round to the hero plant             | =S3_FIND=, jungle 21.3 s  |
+| 187.7 s   | 97       | in close on the ladybug                      | =S3_MACRO=, jungle 27.1 s |
+| 203.2 s   | 105      | the ladybug takes off                        | =S3_FLY=, jungle 40.6 s   |
+| 207.1 s   | 107      | the glide                                    | =S3_ROAM=, jungle 44.5 s  |
+| 214.8 s   | 111      | a glimpse of the beach, and the music's dark warning | =S3_GAP=, jungle 50.3 s   |
+| 216.8 s   | 112      | the tyrannosaurus's first footfall           | =S3_REX=, jungle 52.3 s   |
+| 224.5 s   | 116      | it turns away and begins its departure      | =S3_SHORE=, jungle 60.0 s |
+| 232.3 s   | 120      | we step out (the relief)                     | =S3_CLEAR=, jungle 67.7 s |
+| 236.1 s   | 122      | the blob rises out of the surf               | =S3_BLOB=, jungle 71.6 s  |
+| 245.8 s   | 127      | the blob waves                               | jungle 81.3 s             |
+| 249.7 s   | 129      | the play in the swash                        | jungle 85.2 s             |
+| 261.3 s   | 135      | the cadence home                             | jungle 96.8 s             |
+| 267.0 s   |          | the fade to black                            | =S3_OUT=, jungle 102.5 s  |
+| 269.0 s   | 139      | the end card (the coda)                      | =SCENE4_START=            |
+| 278.7 s   | 144      | the end                                      | =TOTAL_DUR=               |
+
+[[file:making-of.org::#timeline][The making-of's timeline]] and its scene
+sections describe what happens on screen between these beats, and
+[[file:making-of.org::#the-soundtrack][its soundtrack section]] what the music
+does.
+
+** The dev transport
+:PROPERTIES:
+:CUSTOM_ID: the-dev-transport
+:END:
+
+The windowed dev build lets you take the clock over. SPACE pauses, LEFT and
+RIGHT jump 5 s back or forward, and UP and DOWN double or halve the speed,
+between 1/8 and 4 times. The first key press switches the picture from the
+audio clock to a manual timeline. It starts where the clock was, and then
+advances with the wall clock times the speed. Each press logs the new show
+time, the speed, and the name of the section the time falls in, from the
+=SECTIONS[]= table in =main.c=.
+
+The music isn't moved. Once the transport has the clock, the song plays on from
+where it was, and the picture and the music part company. Use it to look at the
+picture, and judge the sync on a run you haven't touched. Seeking past the end
+stops the music, as reaching the end does, and it doesn't come back when you
+seek earlier.
+
+Seeking backwards is safe for the picture. Scene 1's collision sim only runs
+forward, in fixed steps, so on a step back =sim_seek= reseeds it and replays it
+from the start to the new time. The transport is compiled only into the windowed dev build.
+The release, headless and capture builds have none of it, and the shipped file
+pays nothing for it.
+
+* The demo as a case study
+:PROPERTIES:
+:CUSTOM_ID: the-demo-as-a-case-study
+:END:
+
+=demos/hello-world/main.c= uses almost all of the engine, which makes it the
+best documentation the engine has. [[file:making-of.org][The making-of]] takes
+it apart scene by scene, with the end card and
+[[file:making-of.org::#the-soundtrack][the soundtrack]].
+This section is about how the demo's code sits on the engine.
+
+=main.c= holds Scene 1, Scene 2 and the end card, the three mains and the dev
+transport. It includes =scene3.c=, so the jungle is part of the same
+translation unit. Scene 3 is split into eight packages, each with one C file
+and one shader prefix, which plug into a shared world and a per-frame context
+and draw once per pass (see
+[[file:making-of.org::#how-it-put-together][How it's put together]]).
+
+Every program the demo draws with is listed once, in a manifest.
+=programs.def= lists the programs of Scenes 1 and 2 and includes =scene3.def=,
+which includes each package's =s3_<pkg>.def=. One X-macro over that list gives
+the =Demo= struct an =mc_shader= field per program. Startup, hot reload, the
+link checks and teardown walk the same list, so a new program needs no code of
+its own.
+
+A few conventions run across the scenes. The fourth channel of an
+instance's colour is a code that =object.frag= reads: glow from 0 up, the
+crowd's softer glow from -0.3 to -1.6, and an air bubble at -4, tested as
+anything under -3 (see [[file:making-of.org::#lighting-object-frag][Lighting]]).
+The jungle's shaders share blocks of GLSL byte for byte, which keeps them in
+the same light and costs the packer almost nothing.
+
+** What the load makes
+:PROPERTIES:
+:CUSTOM_ID: what-the-load-makes
+:END:
+
+Nothing the demo draws comes from a data file. Most of its geometry is grown in
+vertex shaders (see
+[[#building-geometry-out-of-arithmetic][Building geometry out of arithmetic]]),
+and the load makes the rest on the GPU:
+
+- The demo's 32³ noise volume comes first. It sits on unit 1's 3D binding for
+  every scene, so the shaders' value noise is a single fetch.
+- The creature kit (=jr.comp=) sculpts five animals: Scene 2's fish, crab,
+  predator and whale, and Scene 3's tyrannosaurus. Each is a smooth union of
+  round cones, ellipsoids and fins on a grid of its own (5 cm for the
+  tyrannosaurus), meshed with surface nets. Each vertex is tagged with the two
+  bones that hold it.
+- The kit writes the meshes straight into GPU buffers: one vertex buffer for
+  all five, bound for good on storage-buffer binding 5, and an index buffer
+  each, whose triangle count is read back. =jr.vert= and =fish.vert= then pose
+  and draw them as ordinary meshes. The kit takes about 60 ms of GPU time.
+- =uwplace.comp= works out Scene 2's sand and boulder, then places every
+  boulder, weed blade, coral head and crab, checking clearance against the
+  blob, camera and predator paths and resolving conflicts between props.
+  Each prop grows in where the camera can't see it. The current cell recipe
+  shares its scatter rules; the 18 larger landmarks and all 21 placement
+  passes remain. The earlier 64,365-byte version took about 155 ms for this
+  work.
+- Scene 3 bakes its bark, leaf and sand tiles, and an impostor atlas of four of
+  its trees for the far forest. The warm-up also draws its two still sun maps,
+  which the release build keeps. They always show the world at one frozen
+  moment, half a jungle second before the jungle opens, whichever frame draws
+  them.
+
+The shaders name every texture unit with =layout(binding = N)=, so no C code
+sets a sampler uniform. [[file:making-of.org::#what-draws-it][Scene 2]] and
+[[file:making-of.org::#scene-3-the-jungle][Scene 3]] have the details.
+
+* Getting it under 64k
+:PROPERTIES:
+:CUSTOM_ID: getting-it-under-64k
+:END:
+
+[[file:pipeline.org][The pipeline]] covers this in full: the build flavours,
+every flag and tool, and the size numbers. In short, the 64k budget applies to
+the packed file you run, =hello-world.bin=, which is 63,237 bytes, with 2,299
+to spare. The release ELF inside it is 241,936 bytes, and it's never shipped.
+Five steps get from one to the other:
+
+- The release build compiles for size, with =-Oz -flto= and flags that drop
+  what a demo doesn't need. Some of the flags were picked by measuring their
+  effect on the packed stream (see
+  [[file:pipeline.org::#the-size-flags-grouped][The size flags, grouped]]).
+- The payload brings its own =_start= and imports every libc, libm, X11, ALSA
+  and EGL function by a hash of its name, so no symbol names ship (see
+  [[file:pipeline.org::#keeping-libc-dropping-the-crt-and-the-import-table][Keeping libc]]).
+- The 66 shader files are minified and baked into the executable as one blob,
+  with the repeated blocks of GLSL stored once (see
+  [[file:pipeline.org::#genshaders-py-bake-shaders-into-headers][=genshaders.py=]]).
+- At the payload's link, =fpround.py= rounds the float constants to values the
+  packer can predict. Then =elfshrink.py= trims what a loader never reads.
+- =mkelf.sh= packs the ELF with a context-mixing coder whose model is searched
+  per payload. The launcher decodes it in memory and runs it with
+  =memfd_create= and =execveat=, with no shell and no temp file (see
+  [[file:pipeline.org::#mkelf-sh-pack-py-cm-h-s2dec-s-mcstub-c-s1dec-s-the-elf-self-extractor][the self-extractor]]).
+
+* The easy door: tiny64
+:PROPERTIES:
+:CUSTOM_ID: the-easy-door-tiny64
+:END:
+
+The engine makes you set everything up yourself, which is a lot of work if all
+you want is a shader on screen. =include/microcosm/tiny64.h= is a header-only
+facade over the public API for that case. It opens the window, compiles your
+fragment shader against the engine's full-screen-triangle vertex shader, caches
+uniform locations by name and draws. It's a single-pass canvas without HDR or
+post-processing, and when you want more you move to the full =mc_render.h= API.
+[[file:tutorial.org::#0-the-ten-line-version-tiny64][The tutorial]] starts with
+it, and [[file:toolkit.org::#the-easy-path-tiny64-h][the toolkit reference]]
+lists its calls.
+
+* Determinism
+:PROPERTIES:
+:CUSTOM_ID: determinism
+:END:
+
+A lot depends on the demo being deterministic. The RNG is seeded with fixed
+constants, Scene 1's collision sim runs at a fixed timestep, and the synth is a
+pure function of its seed. So the same build produces the same frames and the
+same audio every time. A headless build (=-DMC_HEADLESS=) renders frames to
+PNGs through the surfaceless backend at a fixed list of show times, so a visual
+regression shows up as a diff.
+
+The frames of a run aren't independent of each other, though. State left by
+one frame, such as the levels of detail chosen or the canopy's flecks, carries
+over to the next. So a before-and-after pair has to come from runs given the
+same list of times. On the UHD 620, a few of Scene 3's stills differ between
+runs by 3-6 pixels of at most 1 level. That has been traced to =ju_plant='s
+lighting, but the cause wasn't found, so comparisons there allow for that
+noise.
+
+Only the payload's link rounds the float constants (see
+[[file:pipeline.org::#fpround-py-the-float-constants-rounded][=fpround.py=]]),
+and the headless and check builds keep them as written. Their frames therefore
+differ from the shipped binary's by sub-pixel amounts, and Scene 1's sim plays
+out a little differently, though each build is deterministic on its own.
+
+The dev build compiles with =-Wall -Wextra -Wshadow -Wpointer-arith
+-Wstrict-prototypes=, and the engine's own sources build without a warning.
+
+* Decisions I'd defend
+:PROPERTIES:
+:CUSTOM_ID: decisions-id-defend
+:END:
+
+Some of the choices here are ones people argue about, so these are the reasons
+for them.
+
+The demo uses OpenGL rather than Vulkan or D3D12. For a size-constrained
+real-time program the older API is the better tool. Classic GL lets the driver
+own the state machine, the allocations and the synchronisation, which is
+megabytes of functionality for the cost of a few function calls. Vulkan and
+D3D12 hand that machinery back to you as explicit pipelines, descriptor
+layouts, memory heaps and a bytecode shader toolchain. All of it turns into
+bytes in your binary and pages of setup before anything draws, and the extra
+control isn't worth that when the aim is to be small. Size-limited intros have
+long been built on this reasoning, and the =mc_gl.h= header comment gives it
+too. The minimum is GL 4.5 core rather than 3.3. Compute shaders, storage
+buffers, sampler objects and =layout(binding)= in GLSL each save C code or make
+a technique possible (the animals are meshed and the seabed placed on the
+GPU). They cost one =#version= line and a few loader entries, and Mesa's
+software rasteriser still provides 4.5. [[file:pipeline.org::#why-opengl-and-not-vulkan-or-d3d12][Why OpenGL]]
+in the pipeline doc goes through what 4.5 brings.
+
+The release build keeps libc. It's dynamically linked, and although it has its
+own =_start= and imports by hash, it still calls into libc. You can go further,
+with no libc at all and raw system calls, and get down into single-digit
+kilobytes. But a 64k budget leaves room to write ordinary C, and the packed
+build still has some to spare. For a project that also wants to be a toolkit
+people use, that room is better spent on readable code, and on more scenes,
+than on shaving a startup stub.
+
+Everything is procedural: the demo has no texture files, mesh files or
+samples. Generators give you detail that compresses to almost nothing. A noise
+function is a few hundred bytes and makes unlimited detail, where a texture is
+a few hundred kilobytes and makes one image. Where a texture is the better
+tool, as for mipmapped detail that holds still at any distance, or a tree drawn
+once into an atlas instead of 240 times, the demo bakes it at load from the
+same noise.
+
+The sim runs at a fixed timestep. Decoupling it from the frame rate makes it
+deterministic, which in turn makes it testable and seekable. It also means the
+physics behaves the same at 144 Hz on a real GPU as it does when frames are
+captured one at a time on =llvmpipe=.
+
+-----
+
+See also [[file:toolkit.org][the toolkit reference]] for each function,
+[[file:pipeline.org][the pipeline doc]] for the full size story,
+[[file:making-of.org][the making-of]] for the demo itself, and
+[[file:tutorial.org][the tutorial]] to build your own.

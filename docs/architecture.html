@@ -1,0 +1,2675 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MICROCOSM internals</title>
+<meta name="generator" content="Org Mode" />
+<style type="text/css">
+  #content { max-width: 60em; margin: auto; }
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #e6e6e6;
+    border-radius: 3px;
+    background-color: #f2f2f2;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: auto;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    top: -8px;
+    right: 12px;
+    padding: 3px;
+    color: #555;
+    background-color: #f2f2f299;
+  }
+  pre.src:hover:before { display: inline; margin-top: 14px;}
+  /* Languages per Org manual */
+  pre.src-asymptote:before { content: 'Asymptote'; }
+  pre.src-awk:before { content: 'Awk'; }
+  pre.src-authinfo::before { content: 'Authinfo'; }
+  pre.src-c:before { content: 'C'; }
+  pre.src-C:before { content: 'C'; }
+  /* pre.src-C++ doesn't work in CSS */
+  pre.src-clojure:before { content: 'Clojure'; }
+  pre.src-css:before { content: 'CSS'; }
+  pre.src-D:before { content: 'D'; }
+  pre.src-ditaa:before { content: 'ditaa'; }
+  pre.src-dot:before { content: 'Graphviz'; }
+  pre.src-calc:before { content: 'Emacs Calc'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-fortran:before { content: 'Fortran'; }
+  pre.src-gnuplot:before { content: 'gnuplot'; }
+  pre.src-haskell:before { content: 'Haskell'; }
+  pre.src-hledger:before { content: 'hledger'; }
+  pre.src-java:before { content: 'Java'; }
+  pre.src-js:before { content: 'JavaScript'; }
+  pre.src-latex:before { content: 'LaTeX'; }
+  pre.src-ledger:before { content: 'Ledger'; }
+  pre.src-lisp:before { content: 'Lisp'; }
+  pre.src-lilypond:before { content: 'Lilypond'; }
+  pre.src-lua:before { content: 'Lua'; }
+  pre.src-matlab:before { content: 'MATLAB'; }
+  pre.src-mscgen:before { content: 'Mscgen'; }
+  pre.src-ocaml:before { content: 'Objective Caml'; }
+  pre.src-octave:before { content: 'Octave'; }
+  pre.src-org:before { content: 'Org mode'; }
+  pre.src-oz:before { content: 'OZ'; }
+  pre.src-plantuml:before { content: 'Plantuml'; }
+  pre.src-processing:before { content: 'Processing.js'; }
+  pre.src-python:before { content: 'Python'; }
+  pre.src-R:before { content: 'R'; }
+  pre.src-ruby:before { content: 'Ruby'; }
+  pre.src-sass:before { content: 'Sass'; }
+  pre.src-scheme:before { content: 'Scheme'; }
+  pre.src-screen:before { content: 'Gnu Screen'; }
+  pre.src-sed:before { content: 'Sed'; }
+  pre.src-sh:before { content: 'shell'; }
+  pre.src-sql:before { content: 'SQL'; }
+  pre.src-sqlite:before { content: 'SQLite'; }
+  /* additional languages in org.el's org-babel-load-languages alist */
+  pre.src-forth:before { content: 'Forth'; }
+  pre.src-io:before { content: 'IO'; }
+  pre.src-J:before { content: 'J'; }
+  pre.src-makefile:before { content: 'Makefile'; }
+  pre.src-maxima:before { content: 'Maxima'; }
+  pre.src-perl:before { content: 'Perl'; }
+  pre.src-picolisp:before { content: 'Pico Lisp'; }
+  pre.src-scala:before { content: 'Scala'; }
+  pre.src-shell:before { content: 'Shell Script'; }
+  pre.src-ebnf2ps:before { content: 'ebfn2ps'; }
+  /* additional language identifiers per "defun org-babel-execute"
+       in ob-*.el */
+  pre.src-cpp:before  { content: 'C++'; }
+  pre.src-abc:before  { content: 'ABC'; }
+  pre.src-coq:before  { content: 'Coq'; }
+  pre.src-groovy:before  { content: 'Groovy'; }
+  /* additional language identifiers from org-babel-shell-names in
+     ob-shell.el: ob-shell is the only babel language using a lambda to put
+     the execution function name together. */
+  pre.src-bash:before  { content: 'bash'; }
+  pre.src-csh:before  { content: 'csh'; }
+  pre.src-ash:before  { content: 'ash'; }
+  pre.src-dash:before  { content: 'dash'; }
+  pre.src-ksh:before  { content: 'ksh'; }
+  pre.src-mksh:before  { content: 'mksh'; }
+  pre.src-posh:before  { content: 'posh'; }
+  /* Additional Emacs modes also supported by the LaTeX listings package */
+  pre.src-ada:before { content: 'Ada'; }
+  pre.src-asm:before { content: 'Assembler'; }
+  pre.src-caml:before { content: 'Caml'; }
+  pre.src-delphi:before { content: 'Delphi'; }
+  pre.src-html:before { content: 'HTML'; }
+  pre.src-idl:before { content: 'IDL'; }
+  pre.src-mercury:before { content: 'Mercury'; }
+  pre.src-metapost:before { content: 'MetaPost'; }
+  pre.src-modula-2:before { content: 'Modula-2'; }
+  pre.src-pascal:before { content: 'Pascal'; }
+  pre.src-ps:before { content: 'PostScript'; }
+  pre.src-prolog:before { content: 'Prolog'; }
+  pre.src-simula:before { content: 'Simula'; }
+  pre.src-tcl:before { content: 'tcl'; }
+  pre.src-tex:before { content: 'TeX'; }
+  pre.src-plain-tex:before { content: 'Plain TeX'; }
+  pre.src-verilog:before { content: 'Verilog'; }
+  pre.src-vhdl:before { content: 'VHDL'; }
+  pre.src-xml:before { content: 'XML'; }
+  pre.src-nxml:before { content: 'XML'; }
+  /* add a generic configuration mode; LaTeX export needs an additional
+     (add-to-list 'org-latex-listings-langs '(conf " ")) in .emacs */
+  pre.src-conf:before { content: 'Configuration File'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .equation-container {
+    display: table;
+    text-align: center;
+    width: 100%;
+  }
+  .equation {
+    vertical-align: middle;
+  }
+  .equation-label {
+    display: table-cell;
+    text-align: right;
+    vertical-align: middle;
+  }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  .org-svg { }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism-themes/1.9.0/prism-one-light.min.css" integrity="sha384-wfpYO27rpeJ2ZOVwfG6TuU4ahxLdxLmGXK/BiSH98jJye0CNNWTOM+kA8rP8Yg4p" crossorigin="anonymous">
+<script>window.Prism = window.Prism || {}; window.Prism.manual = true;</script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/prism.min.js" integrity="sha384-xAgN7OCsK5s0d3G18tqRYrxy8hWsPA14E26TMh7Mi9ZM09vaz4EA0DBTl+80F5yC" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/components/prism-c.min.js" integrity="sha384-gaD4ncierlmWk42Z3BmTp37/z+Dqt8V4Wf74UjTvFeo+M+SgnEI6Ysd98pWhksQv" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/components/prism-bash.min.js" integrity="sha384-9WmlN8ABpoFSSHvBGGjhvB3E/D8UkNB9HpLJjBQFC2VSQsM1odiQDv4NbEo+7l15" crossorigin="anonymous"></script>
+<script>document.addEventListener("DOMContentLoaded", function () {
+if (!window.Prism || !Prism.highlightElement) return;
+/* Org marks blocks as pre.src-LANG > code; Prism wants the class language-LANG on the code element. */
+document.querySelectorAll("pre.src > code").forEach(function (code) {
+var m = code.parentElement.className.match(/\bsrc-(\S+)/);
+if (m && Prism.languages[m[1]]) { code.classList.add("language-" + m[1]); Prism.highlightElement(code); }
+});
+});</script>
+<script>document.addEventListener("DOMContentLoaded", function () {
+/* A pilcrow after each heading links to it. A click puts the link in the URL bar and on the clipboard. */
+document.querySelectorAll("h2[id], h3[id], h4[id]").forEach(function (h) {
+var page = location.pathname.split("/").pop() || "index.html";
+var a = document.createElement("a");
+a.className = "heading-link";
+a.href = "#" + h.id;
+a.title = page + "#" + h.id;
+a.textContent = "¶";
+a.addEventListener("click", function (e) {
+e.preventDefault();
+history.replaceState(null, "", "#" + h.id);
+navigator.clipboard.writeText(location.href).then(function () {
+a.textContent = "✓";
+setTimeout(function () { a.textContent = "¶" }, 1200);
+});
+});
+h.appendChild(a);
+});
+});</script>
+<style> a.heading-link{margin-left:.4em;font-size:.7em;opacity:0;text-decoration:none;vertical-align:middle;transition:opacity .15s} h2:hover a.heading-link,h3:hover a.heading-link,h4:hover a.heading-link{opacity:.6} a.heading-link:hover{opacity:1 !important} </style>
+<style> body{max-width:52em;margin:2em auto;padding:0 1em;line-height:1.55;font-family:Georgia,"Times New Roman",serif;color:#1a1a1a} h1,h2,h3,h4{font-family:-apple-system,Helvetica,Arial,sans-serif;line-height:1.2} pre.src,pre.example{overflow-x:auto;background:#f6f8fa;padding:.6em;border-radius:4px;margin:1.2em} pre.src code{background:none;padding:0;font-size:.8125rem} table{border-collapse:collapse;margin:1em 0} th,td{border:1px solid #ccc;padding:.25em .6em} code{background:#f0f0f0;padding:0 .25em;border-radius:3px} blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:1em;color:#444} a{color:#0645ad} </style>
+</head>
+<body>
+<div id="content" class="content">
+<h1 class="title">MICROCOSM internals
+<br />
+<span class="subtitle">How the engine is put together, and why</span>
+</h1>
+<div id="table-of-contents" role="doc-toc">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents" role="doc-toc">
+<ul>
+<li><a href="#the-shape-of-the-thing">1. The shape of the thing</a></li>
+<li><a href="#talking-to-the-gpu-without-linking-to-it">2. Talking to the GPU without linking to it</a></li>
+<li><a href="#the-platform-seam">3. The platform seam</a></li>
+<li><a href="#math-because-everything-downstream-needs-it">4. Math, because everything downstream needs it</a></li>
+<li><a href="#building-geometry-out-of-arithmetic">5. Building geometry out of arithmetic</a>
+<ul>
+<li><a href="#primitives-and-modifiers">5.1. Primitives and modifiers</a></li>
+<li><a href="#meshes-made-on-the-gpu">5.2. Meshes made on the GPU</a></li>
+</ul>
+</li>
+<li><a href="#the-renderer-and-its-post-stack">6. The renderer and its post stack</a>
+<ul>
+<li><a href="#the-render-targets">6.1. The render targets</a></li>
+<li><a href="#the-frame">6.2. The frame</a></li>
+<li><a href="#vertex-attributes-and-instancing">6.3. Vertex attributes and instancing</a></li>
+<li><a href="#the-post-chain">6.4. The post chain</a>
+<ul>
+<li><a href="#ambient-occlusion-and-contact-shadows">6.4.1. Ambient occlusion and contact shadows</a></li>
+<li><a href="#depth-of-field">6.4.2. Depth of field</a></li>
+<li><a href="#the-bright-pass-and-the-bloom">6.4.3. The bright pass and the bloom</a></li>
+<li><a href="#the-composite">6.4.4. The composite</a></li>
+<li><a href="#the-taa">6.4.5. The TAA</a></li>
+<li><a href="#the-present-downsampling-grain-and-dither">6.4.6. The present: downsampling, grain and dither</a></li>
+</ul>
+</li>
+<li><a href="#the-ambient-share">6.5. The ambient share</a></li>
+<li><a href="#full-screen-passes-fixed-uniforms-and-gl-state">6.6. Full-screen passes, fixed uniforms and GL state</a></li>
+<li><a href="#passes-of-your-own">6.7. Passes of your own</a></li>
+<li><a href="#internal-resolution-and-supersampling">6.8. Internal resolution and supersampling</a></li>
+<li><a href="#where-the-post-shaders-live">6.9. Where the post shaders live</a></li>
+</ul>
+</li>
+<li><a href="#from-enter-to-the-first-frame">7. From Enter to the first frame</a>
+<ul>
+<li><a href="#three-mains">7.1. Three mains</a></li>
+<li><a href="#the-load">7.2. The load</a></li>
+<li><a href="#the-warm-up">7.3. The warm-up</a></li>
+</ul>
+</li>
+<li><a href="#time-cameras-and-rhythm">8. Cameras, tracks and beats</a></li>
+<li><a href="#sound-from-nothing">9. Sound from nothing</a></li>
+<li><a href="#timing">10. Timing</a>
+<ul>
+<li><a href="#the-master-clock">10.1. The master clock</a></li>
+<li><a href="#show-time-and-the-scenes">10.2. Show time and the scenes</a></li>
+<li><a href="#defined-twice-main-c-and-synth-c">10.3. Defined twice: main.c and synth.c</a></li>
+<li><a href="#stretched-clocks">10.4. Stretched clocks</a></li>
+<li><a href="#scene-2-story-clock">10.5. Scene 2's story clock</a></li>
+<li><a href="#scene-3-jungle-clock">10.6. Scene 3's jungle clock</a></li>
+<li><a href="#the-main-beats-in-show-time">10.7. The main beats in show time</a></li>
+<li><a href="#the-dev-transport">10.8. The dev transport</a></li>
+</ul>
+</li>
+<li><a href="#the-demo-as-a-case-study">11. The demo as a case study</a>
+<ul>
+<li><a href="#what-the-load-makes">11.1. What the load makes</a></li>
+</ul>
+</li>
+<li><a href="#getting-it-under-64k">12. Getting it under 64k</a></li>
+<li><a href="#the-easy-door-tiny64">13. The easy door: tiny64</a></li>
+<li><a href="#determinism">14. Determinism</a></li>
+<li><a href="#decisions-id-defend">15. Decisions I'd defend</a></li>
+</ul>
+</div>
+</div>
+<p>
+<a href="index.html">↑ Back to the index</a>
+</p>
+
+<p>
+This page describes how the engine is put together and why, and what happens
+between pressing Enter and the first frame of the show. For what each function
+does, see <a href="toolkit.html">the toolkit reference</a>. For how the binary gets
+small, see <a href="pipeline.html">the pipeline doc</a>.
+</p>
+
+<p>
+It assumes you can read C and have a rough idea of what a GPU does, but not
+that you've ever made a 64k intro.
+</p>
+
+<p>
+Some performance figures and visual comparisons below were measured on an
+earlier version of the demo. It still had volumetric jungle clouds, dust motes
+and beach reflections of nearby objects, and its staging, materials, animation
+and music were different. Unless a figure is identified as current, it hasn't
+been measured again since.
+</p>
+
+<hr />
+<div id="outline-container-the-shape-of-the-thing" class="outline-2">
+<h2 id="the-shape-of-the-thing"><span class="section-number-2">1.</span> The shape of the thing</h2>
+<div class="outline-text-2" id="text-the-shape-of-the-thing">
+<p>
+MICROCOSM is a handful of small modules, each doing one job. They talk to each
+other through plain structs and functions, and there's no framework on top, so
+you can read the code from top to bottom.
+</p>
+
+<pre class="example" id="org8ef2693">
+                               mc.h   types, the dev/release switch, log/assert
+                                |
+  +--------+---------+----------+----------+----------+----------+
+  |        |         |          |          |          |          |
+ math      gl     platform     mesh      render     scene      audio
+(cpu)   (loader   (window,     (cpu      (gpu:     (camera,   (synth +
+         table)    input,   geometry)   shaders,  timeline)     ALSA
+                  pixels)               targets,              thread)
+                                         post)
+  |        |         |          |          |          |          |
+  +--------+---------+----------+----------+----------+----------+
+                                |
+                     demos/hello-world/main.c
+                          "Hello World"
+</pre>
+
+<p>
+Each module depends only on <code>mc.h</code> and on the modules to its left in that
+diagram. <code>math</code> needs nothing else, <code>mesh</code> needs <code>math</code>, and <code>render</code> needs
+<code>mesh</code>, <code>math</code> and the <code>gl</code> table. <code>platform</code> brings up the context and owns
+the GL loader call. The demo pulls from all of them, and nothing reaches back
+the other way.
+</p>
+
+<p>
+Everything is prefixed <code>mc_</code>, and every public type is a value type you can put
+on the stack. The modules that allocate (<code>mesh</code>, <code>render</code>, <code>audio</code>) each have
+an explicit <code>_free</code>. The shipped payload never calls them. It exits and lets
+the OS release everything, so each cleanup is wrapped in <code>MC_TIDY(...)</code>, which
+the packed build compiles out.
+</p>
+
+<p>
+The two build flavours, <code>MC_DEV</code> and <code>MC_RELEASE</code>, are the main global
+switch. Dev logs a lot and checks itself, while
+release is silent and small. The headers default to dev if you include them
+without defining either, so they work on their own.
+</p>
+
+<p>
+The engine is ordinary C, and most of the work of fitting the demo into 64k
+happens around it, in the build. Only a few parts of the engine are shaped by
+the size limit. The GL loader imports no GL symbols (below). The payload build
+(<code>MC_IMPORT_HASH</code>) imports its other library functions by a hash of their
+names and hides the calls it mustn't make. Teardown goes inside <code>MC_TIDY</code>, and
+the post shaders are baked into a header and minified with the demo's. See
+<a href="pipeline.html">the pipeline doc</a> for the flags, the tools, the packer
+and the numbers.
+</p>
+</div>
+</div>
+<div id="outline-container-talking-to-the-gpu-without-linking-to-it" class="outline-2">
+<h2 id="talking-to-the-gpu-without-linking-to-it"><span class="section-number-2">2.</span> Talking to the GPU without linking to it</h2>
+<div class="outline-text-2" id="text-talking-to-the-gpu-without-linking-to-it">
+<p>
+MICROCOSM never links <code>libGL</code>. Linking it would put about 60 named GL imports
+in the binary, plus their relocations, and that's a lot of bytes for something
+that has to fit in 64k.
+</p>
+
+<p>
+Instead, every GL entry point is fetched at runtime through <code>eglGetProcAddress</code>
+and stored in one table, <code>mcgl</code>. A single X-macro list, <code>MC_GL_FUNCS(X)</code>, names
+each function once as <code>X(Name, PFN type)</code>, and both the table's typed members
+and the NUL-separated blob of names that the loader walks are generated from
+it. The table is a union with a plain <code>slot[]</code> array, so <code>gl_loader.c</code> can fill
+it in one loop. <code>mc_gl_load</code> takes the <code>getproc</code> function as an argument, which
+keeps EGL headers out of the loader.
+</p>
+
+<p>
+Functions the payload never calls go in a second list, <code>MC_GL_TOOLS</code>, which
+the payload build leaves out. These are the info logs, <code>glGetError</code> and
+<code>glGetString</code>, the headless backend's renderbuffer, pixel read-back, uniforms
+by name and the float and vec3 setters, the non-instanced indexed draw, and the
+teardown the payload skips. A stray use of one in the payload fails to compile.
+Going the other way, <code>tools/importcheck.py</code> fails the payload's link if the
+first list holds anything the payload doesn't call
+(<a href="pipeline.html#importcheck-py-the-payload-resolves-only-what-it-calls"><code>importcheck.py</code></a>).
+</p>
+
+<p>
+To keep the call sites readable, the header follows the table with a <code>#define</code>
+for every familiar name, mapping it onto its member:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>#define glUseProgram   mcgl.UseProgram
+#define glClear        mcgl.Clear
+</code></pre>
+</div>
+
+<p>
+So code throughout the engine calls <code>glUseProgram(...)</code> and looks like ordinary
+OpenGL, while the linker sees nothing but a struct member dereference. We still
+include <code>&lt;GL/gl.h&gt;</code> and <code>&lt;GL/glext.h&gt;</code>, but only for the <code>GLenum</code> and <code>GLuint</code>
+types, the <code>GL_*</code> constants and the <code>PFNGL*PROC</code> function-pointer typedefs.
+<code>GL_GLEXT_PROTOTYPES</code> is never defined, so no GL symbol is referenced at link
+time. The payload's other imports go by hash, so it names no library function
+at all. The pipeline doc has
+<a href="pipeline.html#the-zero-gl-import-loader">the loader's side of the size story</a>
+and <a href="pipeline.html#genimports-py-hash-the-payload-import-list">the hashed imports</a>.
+</p>
+
+<p>
+If a required entry point is missing, <code>mc_gl_load</code> logs it in dev and returns
+0, and <code>mc_window_open</code> fails cleanly instead of crashing on a null pointer
+three frames later. In dev builds <code>MC_GL_CHECK()</code> adds <code>glGetError</code> checks
+after risky sequences, and in release it compiles to nothing.
+</p>
+
+<p>
+The header comment of <code>mc_gl.h</code> and
+<a href="pipeline.html#why-opengl-and-not-vulkan-or-d3d12">Why OpenGL, and not Vulkan or D3D12</a>
+explain the choice of classic OpenGL. For size-constrained work it makes sense,
+because the driver gives you a great deal of functionality for free.
+</p>
+</div>
+</div>
+<div id="outline-container-the-platform-seam" class="outline-2">
+<h2 id="the-platform-seam"><span class="section-number-2">3.</span> The platform seam</h2>
+<div class="outline-text-2" id="text-the-platform-seam">
+<p>
+<code>mc_platform.h</code> is a single API with two implementations, and you link one of
+them.
+</p>
+
+<ul class="org-ul">
+<li><code>platform_x11_egl.c</code> is the backend you run. It opens a window with raw
+Xlib, creates an EGL context for OpenGL 4.5 core, makes it current and calls
+<code>mc_gl_load(eglGetProcAddress)</code>, and from then on it pumps X events and swaps
+buffers. With <code>fullscreen</code> set, as the release has it, it sets the EWMH
+<code>_NET_WM_STATE_FULLSCREEN</code> hint and also opens the window at the screen's
+size. So the window is the right size from the first frame, even on an X
+server with no window manager. It also asks a compositing window manager to
+leave the window unredirected (<code>_NET_WM_BYPASS_COMPOSITOR</code>), so the frames
+reach the screen as drawn, with less latency. A fullscreen window gets a
+blank pointer too: an empty 1x1 bitmap, used as both the cursor's picture and
+its mask and handed to <code>XCreateWindow</code>.</li>
+<li><code>platform_surfaceless.c</code> is the headless backend. It does the same bring-up
+against EGL's surfaceless platform, which needs no window and no X server,
+and renders into an off-screen FBO. You select it by linking it (with
+<code>-lEGL -lm</code>) in place of <code>platform_x11_egl.c</code>, as the capture build and
+<code>tools/verify.py</code> do. It runs even on machines with no display and only
+<code>llvmpipe</code>, Mesa's software rasteriser.</li>
+</ul>
+
+<p>
+Both expose the same functions, so the engine and the demo don't know which one
+they're linked with. The one place the difference shows is the output
+framebuffer. The renderer finishes by resolving its final image into whatever
+<code>mc_window_output_fbo()</code> returns. On the windowed backend that's <code>0</code>, the
+default framebuffer the driver presents. Headless has no default framebuffer, so
+that backend creates an RGBA8 FBO and returns its id, and after a frame you can
+read it back with <code>mc_window_read_pixels</code> or write it out with
+<code>mc_window_save_png</code>. The PNG writer, in <code>platform_common.c</code> and shared by both
+backends, is a small encoder of its own that writes zlib stored blocks. A debug
+screenshot isn't worth a <code>libpng</code> dependency.
+</p>
+
+<p>
+<code>mc_time_seconds()</code> is a monotonic clock that starts at its first call. It
+drives the timeline when there's no audio. With audio, the demo uses the audio
+clock instead (see <a href="#the-master-clock">the master clock</a>).
+</p>
+</div>
+</div>
+<div id="outline-container-math-because-everything-downstream-needs-it" class="outline-2">
+<h2 id="math-because-everything-downstream-needs-it"><span class="section-number-2">4.</span> Math, because everything downstream needs it</h2>
+<div class="outline-text-2" id="text-math-because-everything-downstream-needs-it">
+<p>
+<code>math.c</code> is the most widely used module and the plainest: small pure functions
+with no state, taking and returning value types. A few of its conventions are
+worth knowing, because getting them wrong wastes a lot of time.
+</p>
+
+<p>
+Matrices are column-major, stored in <code>m[16]</code> the way OpenGL expects, so they
+upload with no transpose. <code>mc_m4_mul(a, b)</code> is <code>a * b</code> in the usual
+right-to-left sense, so <code>proj * view * model</code> reads the way the math does.
+</p>
+
+<p>
+Rotations that need to interpolate go through quaternions (<code>mc_quat</code>), because
+slerping two quaternions behaves and lerping two matrices doesn't. <code>mc_m4_trs</code>
+composes translate * rotate * scale in one go, which is what an instance
+transform needs.
+</p>
+
+<p>
+The RNG is a tiny xorshift whose state lives in an <code>mc_rng</code> struct the caller
+holds. Seed one and pass it around, and you get the same stream on every run.
+All of the demo's randomness (body positions, palettes, collision outcomes)
+comes from a few of these seeded with fixed constants, so every run is
+identical. See <a href="#determinism">Determinism</a>.
+</p>
+
+<p>
+The noise functions give value or gradient noise in <code>[-1, 1]</code>. <code>mc_fbm2</code> and
+<code>mc_fbm3</code> sum octaves for the usual cloudy look, and <code>mc_curl3</code> gives a
+divergence-free field, useful for flow that never pools. This noise runs on the
+CPU, for mesh displacement. The shaders get their value noise from a texture
+instead: <code>vn3</code> makes one fetch from a 32³ volume of random bytes, eased inside
+each cell, and it's the same text in every shader that uses it.
+</p>
+
+<p>
+For splines, <code>mc_catmull_rom</code> and <code>mc_bezier3</code> handle single segments, and
+<code>mc_spline_sample</code> walks a whole loop of control points with a <code>u</code> in <code>[0,1]</code>.
+The demo's camera flies along one of these.
+</p>
+</div>
+</div>
+<div id="outline-container-building-geometry-out-of-arithmetic" class="outline-2">
+<h2 id="building-geometry-out-of-arithmetic"><span class="section-number-2">5.</span> Building geometry out of arithmetic</h2>
+<div class="outline-text-2" id="text-building-geometry-out-of-arithmetic">
+<p>
+The project has no mesh files. <code>mesh.c</code> builds everything from formulas into a
+simple container, <code>mc_mesh</code>: an interleaved vertex array (position, normal and
+a texture coordinate) and a <code>u32</code> index array, three indices per triangle. Both
+grow on demand, and you call <code>mc_mesh_free</code> when you're done.
+</p>
+</div>
+<div id="outline-container-primitives-and-modifiers" class="outline-3">
+<h3 id="primitives-and-modifiers"><span class="section-number-3">5.1.</span> Primitives and modifiers</h3>
+<div class="outline-text-3" id="text-primitives-and-modifiers">
+<p>
+The primitives (<code>mc_mesh_box</code>, <code>mc_mesh_plane</code>, <code>mc_mesh_uv_sphere</code>,
+<code>mc_mesh_icosphere</code>, <code>mc_mesh_torus</code>, <code>mc_mesh_cylinder</code>, <code>mc_mesh_cone</code> and
+<code>mc_mesh_rounded_box</code>) are generated the usual way, from grids, swept angles
+and stacked rings. <code>mc_mesh_icosphere</code> is different. It starts from a
+20-triangle icosahedron and subdivides, so its triangles stay roughly the same
+size instead of bunching at the poles as a UV sphere's do. That matters once
+you displace it with noise, because uneven triangles show up as uneven bumps.
+Two more constructors make whole shapes: <code>mc_mesh_terrain</code> raises a subdivided
+plane into an fBm landscape, and <code>mc_mesh_torus_knot</code> sweeps a tube along a
+(p, q) knot.
+</p>
+
+<p>
+On top of the primitives sit modifiers that change a mesh in place:
+</p>
+
+<ul class="org-ul">
+<li><code>mc_mesh_subdivide</code> splits every triangle into four, giving you more
+vertices to push around.</li>
+<li><code>mc_mesh_displace_noise</code> moves each vertex along its normal by a noise field.
+That's what turns a smooth sphere into something that looks grown.</li>
+<li><code>mc_mesh_spherify</code> blends vertices toward a sphere, for morphing.</li>
+<li><code>mc_mesh_scale</code> scales the positions, for a stretched copy.</li>
+<li><code>mc_mesh_recompute_normals</code> rebuilds smooth normals as the area-weighted
+average of the adjacent face normals. Call it after any displacement so the
+lighting follows the new shape.</li>
+</ul>
+
+<p>
+<code>mc_mesh_append</code> stamps one mesh into another through a rigid transform or a
+uniform scale. Take an icosphere and append 18 cones pointing outward along
+directions spread by the golden angle, and you have a spiky sea urchin in about
+a dozen lines of C. <code>mc_mesh_grid</code> stitches a block of vertices into triangles,
+and every swept surface, from a torus to a tube, is stitched with it.
+</p>
+
+<p>
+<code>mesh.c</code> keeps every primitive as toolkit API, and a payload pays nothing for
+what it doesn't call (<code>--gc-sections</code>).
+</p>
+</div>
+</div>
+<div id="outline-container-meshes-made-on-the-gpu" class="outline-3">
+<h3 id="meshes-made-on-the-gpu"><span class="section-number-3">5.2.</span> Meshes made on the GPU</h3>
+<div class="outline-text-3" id="text-meshes-made-on-the-gpu">
+<p>
+Meshes stay on the CPU until you hand them to <code>mc_mesh_upload</code>, which is in
+<code>render.c</code> because that's where GL lives. A mesh can also skip the CPU
+altogether: <code>mc_mesh_procedural</code> makes one with no vertex buffer, and its vertex
+shader builds each vertex from <code>gl_VertexID</code>. It's drawn either as a plain
+triangle list of a given number of vertices, or through an index buffer of
+vertex ids so that a vertex shared by several triangles is shaded once.
+</p>
+
+<p>
+The reference demo doesn't call <code>mesh.c</code> at all. All of its geometry is made on
+the GPU, where it costs no C. Most of it is built in vertex shaders from
+<code>gl_VertexID</code>, with a mesh that's only a vertex count. That covers Scene 1's six
+solids (the urchin included), its floor, the blob, the planet, Scene 2's sea,
+the coral and the weed, and everything in Scene 3 except the tyrannosaurus.
+Every animal, the tyrannosaurus included, is sculpted at load by a compute
+shader, the creature kit (<code>jr.comp</code>).
+</p>
+
+<p>
+Scene 2's seabed and boulders are worked out once at load by the seabed's
+placement shader, <code>uwplace.comp</code>, which writes them into a buffer it leaves
+bound for the frames. They're drawn by index through grids of vertex ids. The
+seabed matches <code>mc_mesh_terrain</code>'s heightfield to a tenth of a millimetre. It
+uses the same hash, quintic value noise, six fBm octaves at the seed's offsets
+and smoothstep shaping, written in GLSL. Each vertex gets the normal of its six
+triangles, summed the way <code>mc_mesh_recompute_normals</code> sums them, and the checks
+test the GPU's heights against the engine's. The boulder is
+<code>mc_mesh_displace_noise</code>'s three layers of the same noise at the same offsets,
+each pushed out along the ball's radius over a cube's six grids. See
+<a href="making-of.html#what-draws-it">What draws it</a> in the making-of for the
+details.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-the-renderer-and-its-post-stack" class="outline-2">
+<h2 id="the-renderer-and-its-post-stack"><span class="section-number-2">6.</span> The renderer and its post stack</h2>
+<div class="outline-text-2" id="text-the-renderer-and-its-post-stack">
+<p>
+<code>render.c</code> owns a small set of render targets and the fixed post shaders, and
+wraps each frame in <code>begin</code> / <code>end</code>. A frame goes like this:
+</p>
+
+<ol class="org-ol">
+<li><code>mc_renderer_frame(R, t)</code> gives the renderer the frame's time.</li>
+<li><code>mc_renderer_camera(R, proj, view)</code> returns the view-projection to draw
+with, jittered for the TAA.</li>
+<li><code>mc_renderer_begin(R, clear)</code> binds the HDR target and clears it.</li>
+<li>Your scene draws, and may run passes of its own.</li>
+<li><code>mc_renderer_end(R, fbo, w, h, post)</code> runs the post chain and puts the
+result in the framebuffer you hand it.</li>
+</ol>
+</div>
+<div id="outline-container-the-render-targets" class="outline-3">
+<h3 id="the-render-targets"><span class="section-number-3">6.1.</span> The render targets</h3>
+<div class="outline-text-3" id="text-the-render-targets">
+<ul class="org-ul">
+<li><code>scene</code> is the HDR target: RGBA16F colour plus a 24-bit depth texture.
+Everything in your scene draws here in linear light, with nothing clamped to
+1.0 yet, so bright things stay bright for the bloom pass to find. The depth
+is a texture rather than a renderbuffer so that the ambient occlusion, the
+depth of field, the motion blur and the TAA can sample it. The alpha isn't
+coverage. It holds the ambient share of the pixel's light
+(<a href="#the-ambient-share">below</a>).</li>
+<li><code>last</code> is last frame's <code>scene</code>. The two swap every frame, so the TAA can
+compare this frame's depth with the last one's.</li>
+<li><code>bloom[0..5]</code> is the bloom's mip chain, from half resolution down to 1/64.</li>
+<li><code>ao</code> and <code>ao_b</code> are half-resolution RGBA8 targets holding ambient occlusion
+in <code>.r</code> and contact shadows in <code>.g</code>. The depth-aware filter ping-pongs
+between them.</li>
+<li><code>dof_a</code> and <code>dof_b</code> are quarter-resolution HDR. The first holds the scene with
+its circles of confusion, the second the depth-of-field gather.</li>
+<li><code>ldr</code> is an RGBA16F target that holds the tonemapped image just before the
+TAA, still at the scene's size. It uses half floats although the picture is
+already display-ready, because at RGBA8 a fade's smooth glow would reach the
+history in 8-bit steps, and no dither after the TAA can undo that.</li>
+<li><code>hist[2]</code> is the TAA's history, ping-ponged. It's RGBA16F at the output size,
+or at the scene's size when that's larger.</li>
+</ul>
+
+<p>
+The scene targets run at an internal percentage of the output, from 25% to 200%
+(<a href="#internal-resolution-and-supersampling">below</a>).
+</p>
+</div>
+</div>
+<div id="outline-container-the-frame" class="outline-3">
+<h3 id="the-frame"><span class="section-number-3">6.2.</span> The frame</h3>
+<div class="outline-text-3" id="text-the-frame">
+<p>
+Your scene is drawn between <code>mc_renderer_begin(R, clear)</code> and
+<code>mc_renderer_end(...)</code>. <code>begin</code> binds the HDR target and sets up depth and
+back-face culling. One line in it matters more than it looks:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>glDepthMask(GL_TRUE);     /* &lt;-- before the clear, on purpose */
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+</code></pre>
+</div>
+
+<p>
+The post passes leave depth writes disabled. If <code>begin</code> cleared the depth
+buffer while the mask was still off, the clear would silently do nothing, every
+frame would inherit last frame's depth, and the geometry would tear itself
+apart for no obvious reason. So the mask is forced on before the clear, and
+<code>end</code> turns it back on when it's done.
+</p>
+
+<p>
+For the TAA, the camera is jittered. Two calls set this up:
+<code>mc_renderer_frame(R, t)</code> at the start of the frame, with the frame's time, and
+<code>mc_renderer_camera(R, proj, view)</code> where you'd otherwise use <code>proj * view</code>.
+The second call shifts the projection by a sub-pixel step from the Halton (2, 3)
+sequence. It uses eight positions per pixel, in sixteenths of a pixel, so over
+eight frames every pixel is sampled at eight places. The history follows the
+frame's first camera. It carries on while time runs smoothly forward
+(0 &lt; dt &lt; 0.25 s), and starts over, with no jitter, on a jump, a pause, a step
+back, a resize or the first frame. So the jitter depends only on the time. A
+frame rendered on its own, or twice at the same <code>t</code>, is the same plain frame,
+which keeps the headless checks deterministic. A caller that never makes these
+calls just gets plain frames.
+</p>
+
+<p>
+<code>mc_renderer_end</code> runs the post chain (<a href="#the-post-chain">below</a>) and writes
+the result into the framebuffer it's handed. The last frame's view-projection
+is kept for the next frame's reprojection, and <code>scene</code> and <code>last</code> swap.
+</p>
+</div>
+</div>
+<div id="outline-container-vertex-attributes-and-instancing" class="outline-3">
+<h3 id="vertex-attributes-and-instancing"><span class="section-number-3">6.3.</span> Vertex attributes and instancing</h3>
+<div class="outline-text-3" id="text-vertex-attributes-and-instancing">
+<p>
+Instancing is how you draw 182 bodies in a handful of draw calls. An uploaded
+mesh's vertices carry a position (location 0), a normal (1) and a texture
+coordinate (7). The UV is 0 unless the mesh's builder set one, and shaders that
+don't read it ignore it. A procedural mesh's vertices carry nothing, and all
+the demo's meshes are procedural. Any <code>mc_gpu_mesh</code> can also carry a
+per-instance buffer, whose attributes are the four columns of a model matrix
+(locations 2-5) and an RGB+emissive colour (location 6). Each is set with
+<code>glVertexAttribDivisor(., 1)</code>, so it advances once per instance instead of once
+per vertex.
+</p>
+
+<p>
+You fill a flat array of <code>mc_instance</code> on the CPU, call
+<code>mc_mesh_set_instances</code>, then <code>mc_mesh_draw_instanced</code>. The buffer only ever
+grows, and a VAO keeps its buffer binding when the storage is replaced. The
+range-draw helper, <code>mc_mesh_draw_instance_range</code>, changes the instance offset
+to draw a subset for the camera or the light, and sets it back to zero
+afterwards. Ordinary data uploads don't redefine the attribute pointers.
+</p>
+</div>
+</div>
+<div id="outline-container-the-post-chain" class="outline-3">
+<h3 id="the-post-chain"><span class="section-number-3">6.4.</span> The post chain</h3>
+<div class="outline-text-3" id="text-the-post-chain">
+<p>
+<code>mc_renderer_end</code> runs the post chain. Ambient occlusion, depth of field and
+bloom are gated by their strengths in <code>mc_post</code>, and their draws are skipped
+when they're off. The AO pass also runs when there's a sun, for the contact
+shadows. Scene 2 ramps its ambient occlusion in over its run, as part of how
+its look grows
+(<a href="making-of.html#the-renderer-evolves-the-uq-ramp">The renderer evolves</a>),
+and Scene 3 turns the depth of field on for the ladybug. The passes run in this
+order:
+</p>
+
+<ol class="org-ol">
+<li>ambient occlusion and contact shadows, at half resolution (optional);</li>
+<li>depth of field, at quarter resolution (optional);</li>
+<li>the bright pass and the bloom's mip chain (optional);</li>
+<li>the composite, which grades the frame into <code>ldr</code>;</li>
+<li>the TAA, which folds it into the history;</li>
+<li>the present, which puts the history on the output with the grain on top.</li>
+</ol>
+</div>
+<div id="outline-container-ambient-occlusion-and-contact-shadows" class="outline-4">
+<h4 id="ambient-occlusion-and-contact-shadows"><span class="section-number-4">6.4.1.</span> Ambient occlusion and contact shadows</h4>
+<div class="outline-text-4" id="text-ambient-occlusion-and-contact-shadows">
+<p>
+The AO (<code>mc_post.ssao</code>) is ground-truth AO (GTAO, after Jimenez et al.) at half
+resolution. It takes two slices through the view direction and in each finds
+how high the depth buffer rises on either side within a metre, capped at 15% of
+the screen. From those two horizons it works out how much cosine-weighted sky
+the pixel still sees about its own normal. Each frame turns the slices and
+moves the steps, so the TAA gathers far more than the 2x2x4 taps one frame
+takes.
+</p>
+
+<p>
+Each half-resolution pixel reads one full-resolution depth texel at its centre
+and rebuilds its position from that same texel. Sampling between texels would
+let whole rows flip to a neighbour and draw lines on the floor. The normal is
+rebuilt from the full-resolution depth texels on either side of the pixel's
+own, taking on each axis the side whose depth is nearer. It isn't taken from
+the screen-space derivatives, because at half resolution those span two
+texels, and in every other 2x2 quad along a silhouette they span both sides of
+it. Normals from them would draw dark dashes down every trunk, liana and palm
+stem and speckle the foliage. At the screen's edge one side has no step at all,
+so a trace of the position is added to the cross product, which turns that
+normal toward the eye.
+</p>
+
+<p>
+Contact shadows go in <code>.g</code> when <code>mc_post.sun_dir</code> is set. They take eight
+steps toward the sun through the depth buffer, over 4% of the distance. That
+catches the small shadows the shadow maps are too coarse for, such as a foot on
+the sand or a bug on its leaf. They only run where the scene's alpha says
+some of the light is the sun's. A step counts as a hit when it ends 0.1-1.2% of
+the distance behind the depth buffer. The window is narrow because the depth
+buffer only knows front faces, and a ray passing behind a whole trunk isn't in
+its shadow.
+</p>
+
+<p>
+One step of a 24-bit depth buffer grows as z² over the near plane's distance.
+Scene 3's macro shots use a 4 mm near plane, and there the depth step outgrows
+that 0.1% a few metres out, so the far scene would shadow itself at random and
+speckle black under the jitter. So the contact shadows fade out between 1,000
+and 2,000 near-plane distances. That's 50-100 m in the jungle's wide shots,
+whose near plane is 5 cm, and 4-8 m in the macro. A march also stops at the
+screen's edge, where the clamped depth would shadow the borders. A separable
+depth-aware filter (<code>ao_blur.frag</code>) finishes the pass.
+</p>
+</div>
+</div>
+<div id="outline-container-depth-of-field" class="outline-4">
+<h4 id="depth-of-field"><span class="section-number-4">6.4.2.</span> Depth of field</h4>
+<div class="outline-text-4" id="text-depth-of-field">
+<p>
+The depth of field runs when <code>mc_post.dof</code> is above zero, focused at
+<code>mc_post.focus</code>. First the scene and each texel's signed circle of confusion
+are written to <code>dof_a</code> at quarter resolution, each texel a 4x4 box made from
+four bilinear taps. The circle is measured in the frame's pixels, and it's
+negative in front of the focus. Then a bokeh gather goes into <code>dof_b</code>, and the
+composite blends it in per pixel, so sharp pixels keep full resolution.
+</p>
+
+<p>
+The gather is a scatter-as-gather over a golden-angle spiral, after Dennis
+Gustafsson's single-pass bokeh. A tap counts if its own circle of confusion
+reaches this texel. Taps behind a sharper centre can't spread over it, so
+in-focus edges stay clean. The spiral reaches out to the largest circle of
+confusion there is (<code>mc_post.dof</code>, in the frame's pixels), so the bokeh keeps
+its size on screen at any internal resolution.
+</p>
+
+<p>
+Blending by the pixel's own circle of confusion alone would leave a blurred
+foreground with a hard, stepped outline wherever it stands over something
+sharp. That happens to a stem or a leaf in front of the in-focus ferns as the
+gaze comes down to the hero plant (about 185-187 s). So the gather also
+averages how much of what reaches the texel is foreground blurred by more than
+2 pixels, and keeps that in <code>.a</code> with the same running weights as the colour.
+The composite then blends by the larger of the pixel's own blur and five times
+the foreground's share, up to 1. In-focus edges are untouched, because a tap
+only counts if it is itself well out of focus. A leaf's own receding surface
+doesn't qualify, since its blur grows slower than one pixel per pixel.
+</p>
+
+<p>
+The spiral puts its taps about 3 texels apart, however far it reaches. A small,
+very bright point out of focus, like the sun in a dew drop beside the ladybug
+or the speculars on its raised wing cases, would only be caught by the
+receivers whose taps happen to land on it. It would come out as the spiral's
+own pattern of dots. So <code>dof_a</code> has mips. Where the buffer's mean two levels
+down (over 4x4 texels) is bright, a point of light is nearby, and a tap takes
+its colour from that mean instead, by a smoothstep of the mean's luma from 0.3
+to 1. The drop opens into a soft disc and the highlights into glows, and
+nothing else moves. Only bright points do this, because reading the mips
+everywhere would blur the half-blurred middle distance and bleed in-focus
+colour, such as the ladybug's red, into the bokeh behind it.
+</p>
+
+<p>
+Read through one bilinear fetch, that mean has square contours: the fetch's
+tents over the 4x4-texel blocks. A far drop's highlight would come out as a
+lumpy square, and a bright point at a receiver's own centre tap as a sharp dot
+in the middle of its bokeh. Both are dealt with where a tap's own circle of
+confusion is large (a smoothstep from 9 to 18 frame pixels) and the plain mean
+is already bright (luma over 0.3). There the mean is read through four bilinear
+taps half a texel off on the diagonals, which makes the contours round and the
+disc even. The centre tap is taken the same way there, so the dot goes. Smaller
+circles keep the single tap and the plain centre. That leaves the beach alone: its long lens
+stays under 8.5 pixels everywhere, and a wider mean would smear its bright surf
+into blotches.
+</p>
+
+<p>
+Under such a large circle the substitution also starts lower, ramping in from a
+4x4 mean of 0.15 to 0.45 instead of 0.3 to 1. A dim mote's mean peaks at
+0.5-0.6 and is mostly under 0.3, while the point itself reads 2-10. With the
+plain ramp, every ring tap that landed on it would take it raw, and the spiral
+would print as a rosette of dots. The 0.3 is there to keep in-focus colour out
+of the bokeh, and taps that far from focus can't carry any.
+</p>
+</div>
+</div>
+<div id="outline-container-the-bright-pass-and-the-bloom" class="outline-4">
+<h4 id="the-bright-pass-and-the-bloom"><span class="section-number-4">6.4.3.</span> The bright pass and the bloom</h4>
+<div class="outline-text-4" id="text-the-bright-pass-and-the-bloom">
+<p>
+The bright pass runs only when the bloom is on. It reads the HDR scene down to
+half resolution with four bilinear taps over each 4x4 block, each tap weighted
+by 1 / (1 + its luma). That's Karis's average, and it stops a lone sub-pixel
+glint that's on one frame and off the next from throwing a halo that flashes
+with it. The pass keeps only what's above the bloom threshold
+(<code>mc_post.bloom_thresh</code>), with a soft knee so it doesn't pop, and writes it to
+<code>bloom[0]</code>. Luminance uses the usual Rec. 709 weights.
+</p>
+
+<p>
+A pixel that isn't finite (a NaN or an infinity) is dropped here. Otherwise
+one stray pixel, from a zero normal somewhere in a scene, would spread down
+the bloom chain and come back as a black rectangle over a third of the frame.
+</p>
+
+<p>
+The bloom itself is a mip chain. The bright pass is halved down six levels,
+from half resolution to 1/64, with Jimenez's thirteen bilinear taps over each
+6x6 block. Those are a centre, an inner four and an outer ring, weighted into a
+wide, smooth falloff that doesn't alias as things move. Then the chain is
+climbed back up, each level spread by an exact 3x3 tent (four bilinear taps
+half a texel off on the diagonals) and added onto the level above. The pass
+knows it's going up from a negative <code>dir.x</code>. That gives a tight core with a
+wide, soft halo, as a real lens does, for ten cheap draws.
+</p>
+
+<p>
+Outside the bang, the flashes, the burn-out and the reveal, the bloom is mixed
+in at about 3%. The six levels are fixed, so a supersampled frame's halo is a
+little tighter on screen, which doesn't show in the bang or the burn-out.
+</p>
+</div>
+</div>
+<div id="outline-container-the-composite" class="outline-4">
+<h4 id="the-composite"><span class="section-number-4">6.4.4.</span> The composite</h4>
+<div class="outline-text-4" id="text-the-composite">
+<p>
+The composite is the grade, all in one fragment shader at the scene's size. It
+writes into <code>ldr</code> and runs these steps in order.
+</p>
+
+<p>
+It starts from the pixel with a little chromatic aberration (<code>mc_post.chroma</code>).
+Red and blue are each spread over a band of shifts, from half to all of the
+offset, with two taps a channel, the way a lens spreads each band of
+wavelengths. Shifting each channel whole would put sharp one-pixel red and cyan
+lines either side of fine detail such as the bark's grooves, and the TAA's
+sharpening would deepen them.
+</p>
+
+<p>
+Then comes camera motion blur. The shader works out where this pixel was last
+frame from its depth and the camera's move. It smears 0.17 of that motion each
+way, about a third of it in all, like a 120° shutter. The smear reaches at most
+the larger of <code>mc_post.blur</code> and 0.25% of the screen each way. That's 0.25% by
+default, so the seabed rushing by stays readable, and 1% through Scene 2's reef
+flight. There the close kelp and coral move 30-45 pixels a frame, and at 0.25%
+they'd keep sharp edges and step across the frame. The blur takes one tap per
+pixel of smear on each side, up to 16, and beyond that spreads the 16 taps over
+the reach, so its cost stays bounded. A frame with no history reprojects
+through its own camera, so it isn't blurred. Where the velocity isn't a number,
+as when no camera was given, there's no blur either, and the loop is bounded
+whatever arrives. A loop whose trip count is NaN may never end, and it can hang
+the GPU.
+</p>
+
+<p>
+Next the depth of field is blended in, but only on frames where it ran. A
+target nothing has drawn into holds whatever memory it was given. After a
+resize that can be half floats that aren't numbers, and a NaN times a zero
+weight is still NaN, so it would leave black blotches.
+</p>
+
+<p>
+The ambient occlusion and contact shadows follow, upsampled from half
+resolution with depth-aware weights. The AO applies only to the pixel's ambient
+share, and the contact shadows to the rest (<a href="#the-ambient-share">below</a>).
+Both fade out in proportion to the depth of field's blur, because pixel-sharp
+shadows laid over a soft bokeh look like black specks.
+</p>
+
+<p>
+Then any light the caller hands over is added (<code>mc_post.vol_tex</code> times <code>vol</code>,
+upsampled), which is how Scene 3's volumetric shafts come in, and the bloom
+after it.
+</p>
+
+<p>
+Exposure and a filmic tonemap come next. The curve is ACES's (Narkowicz's
+fit), run on colours that are pulled a little toward grey first and pushed
+back out after. That's AgX's trick at half strength: the inset is halfway
+between identity and AgX's, and the outset is its exact inverse. Bright skies
+and the jelly keep their colour a little longer before they whiten, and
+pastels stay pastel. Applied per channel, the curve would skew the sky toward
+cyan and fire toward yellow.
+</p>
+
+<p>
+The rest of the grade is saturation around luminance, a split tone (cooler
+shadows, warmer lights) and a smooth vignette. Then comes the display's
+transform, a plain 1/2.2 power, because exact sRGB would darken the shadows on
+the 2.2-gamma displays the demo was graded on. Last come <code>fade</code> to black and
+<code>white</code>, which are how the demo fades to and from black and burns out to white
+between Scenes 2 and 3.
+</p>
+</div>
+</div>
+<div id="outline-container-the-taa" class="outline-4">
+<h4 id="the-taa"><span class="section-number-4">6.4.5.</span> The TAA</h4>
+<div class="outline-text-4" id="text-the-taa">
+<p>
+The TAA folds this frame's jittered samples into the history. The history is
+at the output size, so at 100% and below the TAA also upsamples. When the frame
+is supersampled, the history is at the frame's own size instead. The TAA then
+resolves the frame 1:1 as it would at 100%, except that its Catmull-Rom history
+fetch is finer, and the present filters the result down.
+</p>
+
+<p>
+A 3x3 Gaussian rebuilds the pixel's centre from the frame and sharpens it
+slightly, in its luma only. Sharpening each channel would deepen every colour
+fringe. The history is fetched through a sharp Catmull-Rom filter from where
+the point was last frame, found from its depth and the camera's move. Then it's
+clipped to the colours around the pixel now, the min/max box intersected with
+mean ± 1.5 σ, and that clip is what stops it ghosting.
+</p>
+
+<p>
+In a still picture each new frame is blended in at only 7%, times the nearest
+sample's closeness to the pixel centre, so an edge's jittered samples average
+out instead of shimmering. The new frame counts for more where the history had
+to be pulled in a long way, since that means something moved: up to 0.5 extra,
+by how many σ the clip moved the history. It also counts for more the faster
+the picture moves, up to 0.4.
+</p>
+
+<p>
+And it counts 0.8 where this point's depth falls outside last frame's depths in
+the 4x4 texels around where it was. That check takes four
+<code>textureGatherOffset</code> calls, made only where there is a history. There are no
+motion vectors for things that move on their own, so this depth test is what
+lets the history go quickly behind a bird or a hop instead of trailing. An edge
+whose depth merely flips under the jitter keeps its history, because its old
+depth is still among the sixteen. Cuts need no detection, because the clip and
+the depth test handle them.
+</p>
+
+<p>
+The reprojection, which takes this frame's clip space to the last frame's, is
+the last view-projection times the inverse of this one. <code>post.vert</code> computes
+the inverse once per vertex of the full-screen triangle and hands it to the TAA
+and the motion blur as a <code>flat</code> matrix. That's three inverses a pass, where one
+per pixel would cost about half a millisecond, and the payload needs no 4x4
+inverse of its own on the CPU.
+</p>
+</div>
+</div>
+<div id="outline-container-the-present-downsampling-grain-and-dither" class="outline-4">
+<h4 id="the-present-downsampling-grain-and-dither"><span class="section-number-4">6.4.6.</span> The present: downsampling, grain and dither</h4>
+<div class="outline-text-4" id="text-the-present-downsampling-grain-and-dither">
+<p>
+The present puts the history onto the output framebuffer with the film grain
+on top. The grain comes after the TAA, which would otherwise smooth it away.
+Its default amount is 0.012; the jungle uses 0.008 so fine leaves and distant
+sand stay quiet.
+</p>
+
+<p>
+A supersampled history is filtered down first, with four bilinear taps around
+the pixel's centre. They're offset by 0.6 of the amount by which an output
+pixel is wider than a history pixel. With the TAA's own Gaussian, that makes a
+filter 0.43-0.46 output pixels wide from 150% to 200%, as wide as the TAA's
+filter at 100%. So the extra samples give better edges and shading rather than
+a sharper picture that aliases. At 100% and below the present takes a single
+tap.
+</p>
+
+<p>
+The grain hashes cells of whole output pixels. A cell is as many pixels a
+side as the output has 1080s of lines: <code>max(1, floor(lines / 1080 + 0.01))</code>.
+The line count comes from <code>uv</code>'s step down one pixel, so <code>render.c</code> passes
+nothing for it. The grain is per pixel up to 2159 lines and 2x2 at 4K, which
+keeps it the size it has on the 1080p screen it was graded on. The cells are
+whole pixels because a fractional cell, such as 4/3 of a pixel at 1440 lines,
+makes some rows and columns two pixels wide and draws a fine plaid in flat
+areas.
+</p>
+
+<p>
+The hash's sums are written in an odd order, and a <code>fract(gl_FragCoord.y)</code>
+stands where the compiler can't fold it. That's the order Mesa's compiler gave
+the grain's earlier form, so at 1080 lines the hash sequence matches the one
+the show was graded with, on Mesa and a UHD 620. The current build uses a
+lower grain amount. Another compiler may round its own way.
+</p>
+
+<p>
+The grain stays noise at any resolution. It's added in the display's steps,
+with a film's response: strongest in the midtones (0.35 + 2.6 l (1 - l)) and
+gentle in the shadows. Added to linear light, it would move dark pixels a dozen
+steps either way each frame, and the dark areas would boil. It's also
+high-passed, as a pixel's hash minus the mean of its right and upper
+neighbours', so it has no blotches. And it's re-seeded 24 times a second, as
+film is, which about halves its frame-to-frame fizz.
+</p>
+
+<p>
+Last, the 8-bit write is dithered, whatever the fade. The grain fades out with
+the picture, so without the dither every fade to black, the burn-out to white
+and the reveal out of it would be quantised with no noise at all. A glow fading
+out would come apart in rings one step apart, as in Scene 1's last second or
+the beach's sky during the final fade. The dither is triangular, one step
+either way, and uses two more hashes of the grain's seed, so it's re-seeded
+along with the grain. It shrinks to nothing within a step of pure black or pure
+white, so those stay pure, where a plain one-step dither would lift an eighth
+of a black screen to 1. It needs <code>ldr</code> in half floats: with an 8-bit <code>ldr</code> the
+rings would reach the history already quantised, and the dither would only make
+them noisier. Mid-show it adds under 1% to the picture's finest texture.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-the-ambient-share" class="outline-3">
+<h3 id="the-ambient-share"><span class="section-number-3">6.5.</span> The ambient share</h3>
+<div class="outline-text-3" id="text-the-ambient-share">
+<p>
+A pixel's light is part sun and part sky, and ambient occlusion only applies to
+the sky's part, since a sunlit patch of floor under a leaf shouldn't grey over.
+So scene shaders write the ambient share of the pixel's radiance (0..1) in
+alpha, and the composite applies
+<code>col *= a * mix(1, ao, ssao) + (1 - a) * contact</code>. Scenes 1 and 2 write 1, so
+there the AO applies to everything and there are no contact shadows. Scene 3's
+lighting writes the true share, and additive passes leave alpha alone.
+</p>
+</div>
+</div>
+<div id="outline-container-full-screen-passes-fixed-uniforms-and-gl-state" class="outline-3">
+<h3 id="full-screen-passes-fixed-uniforms-and-gl-state"><span class="section-number-3">6.6.</span> Full-screen passes, fixed uniforms and GL state</h3>
+<div class="outline-text-3" id="text-full-screen-passes-fixed-uniforms-and-gl-state">
+<p>
+Each of the post passes is a single <code>mc_fullscreen_triangle()</code>: one triangle
+big enough to cover the screen, its vertices computed from <code>gl_VertexID</code>, with
+no vertex buffer at all. Core-profile GL still insists that a VAO is bound, so
+the GL context owns one empty VAO for the purpose, created lazily and deleted
+before the context is torn down. The engine supports one current engine context
+at a time, and reopening it can't reuse an old context's object name.
+<code>tiny64.h</code> draws its full-screen passes with the same trick.
+</p>
+
+<p>
+Nothing is looked up by name. The post passes' parameters ride in one std140
+block, <code>Post</code>, which <code>mc_renderer_end</code> uploads once a frame, once the scene is
+drawn, into the same uniform buffer as the demo's Frame block
+(<code>mc_gl_frame_block</code>, binding 0). The passes' few uniforms of their own, such
+as a blur's direction, and every texture unit are fixed in the GLSL with
+<code>layout(location)</code> and <code>layout(binding)</code>, so the renderer sets no unit and
+fetches no location. The demo does the same with every uniform it sets, and
+that's the convention for new code. Each uniform gets a location that's unique
+in its program (an array takes consecutive locations), every sampler not on
+unit 0 gets a binding, and the C side sets them by number.
+</p>
+
+<p>
+GL's switches work the same way: <code>mc_gl_switch(bits)</code> sets the depth test,
+depth writes, culling and blending in one call, with two bits each (leave, on,
+off). The public header documents the GL state that the passes own. Callers
+must leave scissor, stencil and polygon offset disabled, and leave full colour
+writes and fill mode on.
+</p>
+</div>
+</div>
+<div id="outline-container-passes-of-your-own" class="outline-3">
+<h3 id="passes-of-your-own"><span class="section-number-3">6.7.</span> Passes of your own</h3>
+<div class="outline-text-3" id="text-passes-of-your-own">
+<p>
+The caller can add its own passes to a frame. Between <code>mc_renderer_begin</code> and
+the lit draws it can bind a target of its own, draw into it, and call
+<code>mc_renderer_bind_scene</code>, which hands the framebuffer back to the HDR target.
+<code>mc_renderer_depth</code> and <code>mc_renderer_color</code> hand out the scene's depth texture
+and the picture drawn so far. <code>mc_renderer_blur</code> is the renderer's depth-aware
+filter, for a buffer of one's own at half or quarter resolution. The demo uses
+all of them.
+</p>
+
+<p>
+Scene 2's sun shadow map is one such pass. The demo binds its own depth-texture
+FBO, renders the big casters from the light's point of view, and hands the
+framebuffer back. The lit shaders sample that depth texture in compare mode,
+with 3x3 taps of bilinear PCF. Scene 2 redraws the map on every frame that
+draws the sea below, starting with the first frame of the crossing. Its object
+shader, which draws the bubbles, the eyes and the marine snow, reads the map
+whatever the realism ramp says.
+</p>
+
+<p>
+Scene 1 and the end card borrow the same map for their key light, since they
+never share a frame with Scene 2. <code>s1_draw</code> draws the shapes into it before
+<code>mc_renderer_begin</code>, which hands the framebuffer back, so no <code>shadow_end</code> is
+needed. <a href="making-of.html#lighting-object-frag">Scene 1's lighting</a> tells how
+the glass casts a third of a shadow there. The scenes' depth passes share
+<code>shadow_begin</code> and <code>shadow_end</code> in <code>main.c</code>, as all three scenes share
+<code>camera_vp</code>, <code>frame_basics</code> and <code>post_depth</code>.
+</p>
+
+<p>
+The jelly blob is a clear ball lens. It casts no shadow, but it focuses the
+sun, and <code>uwsurf.frag</code> works out its caustic from the ball's centre and radius,
+which ride in the Frame block's <code>uGlow</code> and <code>uGlowAmt</code>. Each scene gives that
+block's fields its own meanings, and where two uses meet, the block is sent
+again between draws. Scene 2 re-sends it with <code>uGlowAmt</code> 0 before it draws its
+bubbles, eyes and marine snow with Scene 1's object shader, whose glow light
+reads the same two fields. Scene 1 uses <code>uAtmo</code>, Scene 2's sky ramp, for its
+bang's shock front and the dark of its outro. So the end card, which draws
+through the same <code>s1_draw</code>, sets <code>uAtmo</code> back to 1 itself instead of relying on
+whatever ran before it.
+</p>
+
+<p>
+Scene 2's dive into the sea is another custom pass. For the 0.34 s the lens
+takes to go under, a frame first draws the sea above and copies the picture to
+a texture (<code>jelly_copy</code>, unit 9). Then it clears, draws the sea below, and lays
+the sea above back over it, above a waterline that sweeps up the lens
+(<code>dip.frag</code>). The frame builds its first camera, the one the TAA and the motion
+blur follow, from the sea below, so that it matches the depth buffer.
+</p>
+
+<p>
+The jellies of Scenes 2 and 3 and Scene 1's glass bodies are drawn last, and
+they look through that same copy. The copy is always the whole frame, one
+<code>glCopyTexSubImage2D</code>. Scene 2's ball lens reads up to about 2.3 radii from its
+centre, so a rectangle round the ball would be most of the frame anyway.
+<code>s1_shapes</code> sorts each shape type's glass to the end of its instances and draws
+the two ranges separately, with <code>mc_mesh_draw_instance_range</code>. The instances
+are uploaded once a frame, by the first of its four passes. In Scene 2,
+whatever must not be in the copy draws after the jelly: the bubbles, the blob's
+eyes and the marine snow. The making-of's Scene 2 section,
+<a href="making-of.html#what-draws-it">What draws it</a>, has that order and the
+depths the jelly writes.
+</p>
+
+<p>
+The copy's texture is made again when the renderer's size changes. Scene 2
+checks for that on its first frame, which is near-black, so the re-allocation
+(37 MB at 1620 lines) doesn't land on the dip in full view.
+</p>
+
+<p>
+Scene 3 runs passes of its own too. It has three sun maps: one round the
+clearing and one round the beach, drawn once, and a third, drawn every frame,
+tight round the character on show. It marches its light shafts at quarter
+resolution into a target of its own, reading the scene's depth through
+<code>mc_renderer_depth</code>. It smooths them with <code>mc_renderer_blur</code> and hands them to
+the composite as <code>mc_post.vol_tex</code>. Its atmospheric sky and thin horizon
+wisps come from a 64x32 radiance table, also sampled by the sea and wet sand for their sky
+reflections. There are no cloud history targets, jungle dust particles or
+screen-space reflections of nearby objects in the current build.
+<a href="making-of.html#how-it-put-together">How it's put together</a> and
+<a href="making-of.html#light-s3-light-c-jl-and-the-engine-post">Light</a>, in the
+making-of's Scene 3 section, have the details.
+</p>
+</div>
+</div>
+<div id="outline-container-internal-resolution-and-supersampling" class="outline-3">
+<h3 id="internal-resolution-and-supersampling"><span class="section-number-3">6.8.</span> Internal resolution and supersampling</h3>
+<div class="outline-text-3" id="text-internal-resolution-and-supersampling">
+<p>
+The scene targets run at an internal percentage of the output, from 25% to 200%,
+set with <code>mc_renderer_set_scale</code> (100% when the renderer is made). Presentation
+and the camera's aspect follow the renderer's output size, which
+<code>mc_renderer_resize</code> sets. The TAA resolves the internal-resolution samples
+into its output-size history or, above 100%, into one at the frame's size for
+the present to filter down. <code>mc_renderer_end</code> centres that output in the
+framebuffer it's handed, with opaque black around it when the framebuffer is
+larger.
+</p>
+
+<p>
+The windowed main uses both the output size and the scale. Every frame it sizes
+the renderer to the largest 16:9 rectangle in the window (<code>demo_fit</code>, which the
+load's warm-up shares), such as 1920x1080 on a 1920x1200 or a 2560x1080
+screen. Every shot is composed for 16:9, including the two trunks that frame the
+beach, so on a screen of another shape the picture is letterboxed or
+pillarboxed and the camera keeps its aspect.
+</p>
+
+<p>
+The windowed main also supersamples by lines, not by a percentage. Scene 1 and
+the end card, the cheap frames, render 2160 lines, and Scenes 2 and 3 render
+</p>
+<ol class="org-ol">
+<li>That's 200% and 150% of a 1080p picture, or 100% and 75% of a 4K one, so</li>
+</ol>
+<p>
+a 4K screen gets the same frames instead of four times the work. It never goes
+past 200%, and a picture under 1080 lines gets the percentages a 1080-line one
+does. The scale switches on the near-black cuts at either side, and a resize
+starts the TAA's history over anyway.
+</p>
+
+<p>
+<code>MC_RENDER_SCALE</code> fixes one percentage, 25-200, for the whole show, and 80
+suits an integrated GPU. The headless main and <code>tools/verify.py</code> keep one size
+and scale throughout, 960x540 at 80% by default. The capture main renders
+1920x1080 frames at one scale for the whole show (<code>MC_CAP_SCALE</code>, 200 by
+default, so every frame comes from 2160 lines). The GTAO and bloom sample
+counts are compile-time constants in their shaders.
+</p>
+</div>
+</div>
+<div id="outline-container-where-the-post-shaders-live" class="outline-3">
+<h3 id="where-the-post-shaders-live"><span class="section-number-3">6.9.</span> Where the post shaders live</h3>
+<div class="outline-text-3" id="text-where-the-post-shaders-live">
+<p>
+The post shaders live in <code>src/shaders/</code> and are baked into the generated
+<code>mc_engine_shaders.h</code>, which <code>render.c</code> includes, so they ship inside the
+engine instead of as loose files. In release they're minified together with the
+demo's shaders, and in dev they're kept verbatim
+(<a href="pipeline.html#genshaders-py-bake-shaders-into-headers"><code>genshaders.py</code></a>).
+The demo's scene shaders are separate (<code>demos/hello-world/shaders/</code>), because
+they belong to the demo, not the engine.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-from-enter-to-the-first-frame" class="outline-2">
+<h2 id="from-enter-to-the-first-frame"><span class="section-number-2">7.</span> From Enter to the first frame</h2>
+<div class="outline-text-2" id="text-from-enter-to-the-first-frame">
+<p>
+The release is one file. When you run it, its launcher decodes the payload in
+memory, which takes under two seconds, and runs it
+(<a href="pipeline.html#mkelf-sh-pack-py-cm-h-s2dec-s-mcstub-c-s1dec-s-the-elf-self-extractor">the self-extractor</a>).
+From there it's ordinary C: <code>main</code> opens the window, the demo loads, and the
+music starts the show.
+</p>
+</div>
+<div id="outline-container-three-mains" class="outline-3">
+<h3 id="three-mains"><span class="section-number-3">7.1.</span> Three mains</h3>
+<div class="outline-text-3" id="text-three-mains">
+<p>
+There are three mains, chosen at compile time. The windowed main runs the show
+in real time. In the release it's fullscreen with a 16:9 picture inside, and
+the screen is black from the moment the window opens, because one cleared frame
+is swapped in before the load. <code>-DMC_HEADLESS</code> swaps in a main that dumps a PNG
+for each key moment of the show, at 960x540, and quits. Only <code>main.c</code> reads
+that macro, and the engine never does, so a headless build also links the
+surfaceless backend.
+</p>
+
+<p>
+<code>-DMC_CAPTURE</code> swaps in one that renders the whole show offline at 1920x1080
+and 60 fps and streams raw RGBA frames to stdout, ready to pipe into ffmpeg. It
+renders every frame from 2160 lines unless <code>MC_CAP_SCALE</code> picks another
+percentage, 25-200, and <code>MC_CAP_DUR</code> can cut the show short. With
+<code>MC_CAP_AUDIO</code> it writes the soundtrack to a file instead. It's built headless,
+on the surfaceless backend. <code>make capture</code>
+builds it and records the show with it (<code>tools/capture.sh</code>, and
+<a href="pipeline.html">the pipeline doc</a> has the recipe).
+</p>
+</div>
+</div>
+<div id="outline-container-the-load" class="outline-3">
+<h3 id="the-load"><span class="section-number-3">7.2.</span> The load</h3>
+<div class="outline-text-3" id="text-the-load">
+<p>
+The load is everything <code>demo_make</code> does before the show. It makes the renderer
+and the demo's 32³ noise volume, which the bakes and the seabed's placement
+read. Then it builds the procedural meshes and Scene 1's bodies and logo,
+compiles every shader, sculpts the animals and bakes Scene 2's materials. It
+places the seabed's props and makes Scene 3, with its baked tiles, the far
+forest's impostors and the tyrannosaurus. With a warm shader cache that takes
+about a second on a UHD 620. The load's last step is the warm-up below, and the
+music starts only after it.
+</p>
+</div>
+</div>
+<div id="outline-container-the-warm-up" class="outline-3">
+<h3 id="the-warm-up"><span class="section-number-3">7.3.</span> The warm-up</h3>
+<div class="outline-text-3" id="text-the-warm-up">
+<p>
+A driver may finish building a program only at its first draw, and Mesa's Intel
+driver builds it again there if the target is of another kind
+(<code>INTEL_DEBUG=perf</code> logs "Recompiling fragment shader"). Other first uses cost
+time too, such as the glass's copy of the picture (66 MB at 4K inside) and the
+targets sized to the picture. Left to the show, those first uses would drop
+frames with a cold shader cache: at the show's first frame, at the bang, where
+the glass first goes into the key light's map, and under Scene 3's white.
+</p>
+
+<p>
+So the windowed main's last step before the music, <code>demo_warm</code>, draws eight of
+the show's frames without showing them. It draws them at the sizes the show
+uses (<code>demo_fit</code>), at half bars 64, 72, 95, 105, 162, 227, 246 and 38, and in
+that order they cover:
+</p>
+
+<ul class="org-ul">
+<li>the planet and its moon (61.9 s);</li>
+<li>the dip: both seas, the waterline, the milky blob, its bubbles and the
+occlusion (69.7 s);</li>
+<li>the whale overhead (91.9 s);</li>
+<li>the reef: weed, fish, coral, boulders, their sun map, the jelly and the moon
+jellies (101.6 s);</li>
+<li>Scene 3's first light: the forest, its sun maps, the sky, the shafts, the
+birds and the ladybug (156.8 s);</li>
+<li>the tyrannosaurus, the beach and the sea (219.7 s);</li>
+<li>the blob ashore, its sun map and the depth of field (238.1 s);</li>
+<li>and Scene 1 last (36.8 s), which leaves the renderer at the size the show
+opens with.</li>
+</ul>
+
+<p>
+A scan of that earlier version at 60 fps, with the GL calls instrumented,
+found 47 programs drawn in 56 pairings of program, kind of target and blending.
+Those counts predate the removal of the cloud, dust and reflection programs.
+The eight warm-up frames cover the scenes' different targets and blending.
+No two of the planet, the dip,
+the whale in view and the coral are ever on screen together, and the same goes
+for the birds, the tyrannosaurus and the blob's depth of field. The frame at
+156.8 s also draws Scene 3's two still sun maps, which the show then keeps.
+They're drawn with the world as the show has it in the white's last half
+second, whichever frame draws them, so they are the show's own.
+</p>
+
+<p>
+Afterwards, anything later frames read is put back as the load left it, so the
+show draws the same frames it would have drawn without the warm-up. That means
+the Frame block (Scene 1 sets only its own terms) and the boulders' detail
+levels, which have hysteresis. The TAA's history needs nothing. The show's
+first frame comes earlier in the clock than the last warm-up frame, and a
+step back in the clock starts the history over. A caller starting within a
+quarter second after 36.8 s would carry it on, but this main, the only caller,
+never does. The warm-up doesn't run Scene 1's collision sim, so
+the shapes it draws stand where they start. The audio, whose clock is the
+picture's, starts after the warm-up (<code>mc_audio_start</code> publishes t = 0), so the
+show still starts at 0 s with the music.
+</p>
+
+<p>
+The warm-up adds about a second to the load with the cache warm, and 1.2-2.1 s
+cold. The show's first frame gives about 0.2 s of that back, because the
+renderer's targets already exist. With a cold cache no program is rebuilt
+during the show, and the four rebuilds Mesa still makes all happen in the load.
+On a UHD 620 with a cold cache, each event frame's excess over the median of
+its ten neighbours on either side (median of 3 runs) is -9 ms for the first
+frame and +15 ms for the bang. The frame under Scene 3's white that draws the
+still maps comes to +70 ms. The dip's +26-29 ms is its own cost (two seas and
+the copy), and the ladybug, the tyrannosaurus and the blob stay within 15 ms.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-time-cameras-and-rhythm" class="outline-2">
+<h2 id="time-cameras-and-rhythm"><span class="section-number-2">8.</span> Cameras, tracks and beats</h2>
+<div class="outline-text-2" id="text-time-cameras-and-rhythm">
+<p>
+<code>scene.c</code> is small. An <code>mc_camera</code> is a position, target and up vector plus
+fov, near and far, and <code>mc_camera_view</code> and <code>mc_camera_proj</code> turn it into
+matrices. <code>mc_frustum_make</code> takes the six planes out of a view-projection
+matrix, and <code>mc_frustum_sphere</code> tests a bounding sphere against them, which is
+how the demo culls. Keyframe tracks (<code>mc_track_f</code>, <code>mc_track_v3</code>) interpolate
+hand-authored curves of a value over time, with a choice of easing per key.
+</p>
+
+<p>
+The timeline helpers phrase time musically. Given an
+<code>mc_timeline { t, duration, bpm }</code>:
+</p>
+
+<ul class="org-ul">
+<li><code>mc_beats</code> converts seconds to beats, so you can phrase animation in musical
+time instead of wall-clock seconds.</li>
+<li><code>mc_beat_pulse</code> is a 0..1 pulse that peaks on each beat, for anything that
+should bounce. The demo doesn't use it, because a hard pulse makes motion
+stutter. Scene 1 runs a plain sine of <code>mc_beats</code> instead, which only makes
+the glow and the bloom shimmer.</li>
+<li><code>mc_window_active</code> and <code>mc_window_phase</code> gate and normalise a sub-range.
+Scene 1 uses <code>mc_window_phase</code> for its collapse, a 0..1 progress from
+<code>T_COLLAPSE</code> (44.6 s) to <code>T_BLACK</code> (49.2 s).</li>
+</ul>
+
+<p>
+None of this keeps time by itself: it's handed a time. Where that time comes
+from, and how it stays on the music, is covered in <a href="#timing">Timing</a>. The
+<a href="toolkit.html#mc-scene-h-camera-tracks-timeline">toolkit reference</a> has
+the calls.
+</p>
+</div>
+</div>
+<div id="outline-container-sound-from-nothing" class="outline-2">
+<h2 id="sound-from-nothing"><span class="section-number-2">9.</span> Sound from nothing</h2>
+<div class="outline-text-2" id="text-sound-from-nothing">
+<p>
+The soundtrack is computed, not played back. <code>synth.c</code> is a small software
+synth: give it a buffer and a frame count, and it fills the buffer with
+interleaved stereo floats in <code>[-1, 1]</code> and advances its own clock. It uses no
+samples. Every voice is built from oscillators, envelopes, filters and noise,
+with a ping-pong delay and a stereo feedback-delay-network reverb, and a master
+bus with a kick-driven sidechain pump and a peak limiter. The seed only jitters
+incidental detail, such as start phases and detune, so a given seed renders the
+same song down to the bit, in blocks of any size.
+</p>
+
+<p>
+The song is a few small tables in the same file: the chord progressions, the
+step patterns, and an arrangement of ramps for each section. It runs 144 bars
+at 124 BPM, in four movements and a coda, with one or two movements to each
+scene. <a href="making-of.html#the-soundtrack">The soundtrack</a> describes the music, the voices and
+the reverb, and how to change them.
+</p>
+
+<p>
+<code>audio.c</code> plays it. It starts a thread that pulls blocks of 1,024 frames from a
+callback and writes them to ALSA, which it opens nonblocking with 100 ms of
+latency. If ALSA won't open, or a write fails for good, the thread carries on
+in silence, paced against absolute deadlines, and the demo keeps running. The
+callback is real-time code: <code>mc_synth_render</code> doesn't allocate, do I/O or take
+locks. The thread holds on to each block until the device has taken all of it,
+and it recovers from an underrun with <code>snd_pcm_prepare</code>. The main thread stops
+it by clearing an atomic flag and joining it. The release payload never does
+that: it exits, and the OS ends the thread.
+</p>
+
+<p>
+The thread also publishes the playback position, which <code>mc_audio_time()</code> turns
+into the demo's master clock (see <a href="#the-master-clock">The master clock</a>).
+</p>
+</div>
+</div>
+<div id="outline-container-timing" class="outline-2">
+<h2 id="timing"><span class="section-number-2">10.</span> Timing</h2>
+<div class="outline-text-2" id="text-timing">
+<p>
+The picture is timed by the music. One clock, the song's playing position,
+drives every scene, and every scene is a whole number of the song's bars. This
+section covers the clock, the scene boundaries, the two stretched clocks that
+Scenes 2 and 3 are choreographed on, and the constants that tie the picture to
+the music in <code>src/synth.c</code>.
+</p>
+
+<p>
+Times in these docs are given in one of four clocks:
+</p>
+
+<ul class="org-ul">
+<li>Show time is the seconds since the song's first sample. The timeline tables
+use it.</li>
+<li>Scene-local time is the seconds since a scene began. It's what
+<code>render_scene2</code> and the other scene functions are handed.</li>
+<li>Scene 2's story seconds come from <code>uw_u()</code>.</li>
+<li>Scene 3's jungle seconds are <code>c-&gt;j</code>.</li>
+</ul>
+
+<p>
+The last two are stretched against show time, as described below.
+</p>
+</div>
+<div id="outline-container-the-master-clock" class="outline-3">
+<h3 id="the-master-clock"><span class="section-number-3">10.1.</span> The master clock</h3>
+<div class="outline-text-3" id="text-the-master-clock">
+<p>
+The windowed main reads the clock once a frame, at the top of its loop. With
+audio it's <code>mc_audio_time()</code>, the position of the sample that's being heard.
+After each write to ALSA, the audio thread takes the frames submitted so far,
+subtracts the delay the device reports, and publishes the result with a
+timestamp from the monotonic clock. <code>mc_audio_time()</code> adds the time since that
+stamp. It never runs past the audio already submitted and never goes
+backwards. It reads 0 until the device starts playing, which happens once its
+100 ms buffer is full.
+</p>
+
+<p>
+If ALSA won't open, or a write fails for good, the thread keeps rendering the
+song and throws it away, sleeping to absolute deadlines on the monotonic clock.
+The clock then runs at the pace the music would have played. If the synth
+can't be created at all, there's no audio thread, and the main falls back to
+the wall clock (<code>mc_time_seconds()</code> since the start).
+</p>
+
+<p>
+The picture follows the sound, never the other way round. When a frame runs
+long, the next one jumps to where the music is, because a dropped frame is much
+easier to forgive than a stutter in the audio. Nothing else syncs the two:
+there are no cues passed between the threads, only the shared clock. The music
+starts after the load and its warm-up frames (see
+<a href="#the-renderer-and-its-post-stack">above</a>), so show time 0 is the song's
+first sample.
+</p>
+
+<p>
+The clock is monotonic and never wraps. The main clamps it at <code>TOTAL_DUR</code> and
+hands it to <code>render_frame</code>, which picks the scene. When the clock reaches the
+end, the release build exits, and the dev build stops the music once and holds
+on a black frame.
+</p>
+
+<p>
+The other two mains have no audio clock. The capture main renders frame <i>n</i> at
+exactly <i>n</i> / 60 s, and writes the soundtrack separately (<code>MC_CAP_AUDIO</code>) from
+the same synth and seed, so the two line up exactly when they're muxed. The
+headless main renders a fixed list of show times.
+</p>
+</div>
+</div>
+<div id="outline-container-show-time-and-the-scenes" class="outline-3">
+<h3 id="show-time-and-the-scenes"><span class="section-number-3">10.2.</span> Show time and the scenes</h3>
+<div class="outline-text-3" id="text-show-time-and-the-scenes">
+<p>
+The song is in 4/4 at 124 BPM throughout, so a bar (<code>BAR_S</code>, 240 / <code>BPM</code>) is
+1.935 s. Each scene starts on the first bar of its music and lasts a whole
+number of bars:
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Part</th>
+<th scope="col" class="org-right">Song bars</th>
+<th scope="col" class="org-left">Show time</th>
+<th scope="col" class="org-left">Length</th>
+<th scope="col" class="org-left">Music</th>
+<th scope="col" class="org-left">In <code>main.c</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">Scene 1</td>
+<td class="org-right">0-26</td>
+<td class="org-left">0-50.3 s</td>
+<td class="org-left">26 bars, 50.3 s</td>
+<td class="org-left">the first movement</td>
+<td class="org-left"><code>SCENE1_DUR</code> (<code>DUR</code>)</td>
+</tr>
+
+<tr>
+<td class="org-left">Scene 2</td>
+<td class="org-right">26-80</td>
+<td class="org-left">50.3-154.8 s</td>
+<td class="org-left">54 bars, 104.5 s</td>
+<td class="org-left">the second and third</td>
+<td class="org-left"><code>SCENE2_START</code>, <code>SCENE2_DUR</code></td>
+</tr>
+
+<tr>
+<td class="org-left">Scene 3</td>
+<td class="org-right">80-139</td>
+<td class="org-left">154.8-269.0 s</td>
+<td class="org-left">59 bars, 114.2 s</td>
+<td class="org-left">the fourth</td>
+<td class="org-left"><code>SCENE3_START</code>, <code>SCENE3_DUR</code></td>
+</tr>
+
+<tr>
+<td class="org-left">End card</td>
+<td class="org-right">139-144</td>
+<td class="org-left">269.0-278.7 s</td>
+<td class="org-left">5 bars, 9.7 s</td>
+<td class="org-left">the coda</td>
+<td class="org-left"><code>SCENE4_START</code>, <code>SCENE4_DUR</code></td>
+</tr>
+
+<tr>
+<td class="org-left">The show</td>
+<td class="org-right">0-144</td>
+<td class="org-left">0-278.7 s</td>
+<td class="org-left">144 bars, 278.7 s</td>
+<td class="org-left">&nbsp;</td>
+<td class="org-left"><code>TOTAL_DUR</code></td>
+</tr>
+</tbody>
+</table>
+
+<p>
+<code>render_frame</code> hands each scene its local time, the show time minus the
+scene's start. Scene 1's cues are bars of the song. Its section starts,
+<code>T_BANG</code>, <code>T_HOOKA</code>, <code>T_BREAK</code>, <code>T_HOOKB</code> and <code>T_OUTRO</code>, are bars 4, 8, 12, 16
+and 23. The moments of its story, such as <code>T_LOGO_IN</code>, <code>T_COLLAPSE</code>, <code>T_BLACK</code>
+and <code>T_WINK</code>, are offsets in seconds from those. The end card counts beats from
+its start. Scenes 2 and 3 are choreographed on clocks of their own, described
+below.
+</p>
+
+<p>
+No hand-off shows a cut. Scene 1 is black round its seed by <code>T_BLACK</code> (49.2 s),
+and the seed, by then a star, ends where Scene 2's sun rises. Scene 2 burns out
+to white over its last 2.5 s (<code>S2_END_FADE</code>). Scene 3 holds the white for a bar
+(<code>S3_J0</code>) and opens out of it over 2.4 jungle seconds (<code>S3_REVEAL</code>). It fades
+to black over its last 2 s (<code>S3_OUT</code>). The end card fades up over its first
+beat and out over its last three, as the coda dies away.
+</p>
+</div>
+</div>
+<div id="outline-container-defined-twice-main-c-and-synth-c" class="outline-3">
+<h3 id="defined-twice-main-c-and-synth-c"><span class="section-number-3">10.3.</span> Defined twice: main.c and synth.c</h3>
+<div class="outline-text-3" id="text-defined-twice-main-c-and-synth-c">
+<p>
+The tempo and the song's layout are written down twice: for the picture in
+<code>demos/hello-world/main.c</code> and <code>scene3.c</code>, and for the music in <code>src/synth.c</code>.
+Neither is derived from the other, and nothing checks that they agree. If you
+change one, change the other to match, or the picture slides off the music from
+that point on.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">What</th>
+<th scope="col" class="org-left">Picture (<code>main.c</code>, <code>scene3.c</code>)</th>
+<th scope="col" class="org-left">Music (<code>synth.c</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">The tempo</td>
+<td class="org-left"><code>BPM</code> (124), and <code>BAR_S</code> = 240 / <code>BPM</code></td>
+<td class="org-left"><code>SONG_BPM</code> (124), with 16 steps to the bar</td>
+</tr>
+
+<tr>
+<td class="org-left">Scene 1's sections</td>
+<td class="org-left"><code>T_BANG</code>, <code>T_HOOKA</code>, <code>T_BREAK</code>, <code>T_HOOKB</code>, <code>T_OUTRO</code>: bars 4, 8, 12, 16, 23</td>
+<td class="org-left"><code>BARS_INTRO</code>, <code>BARS_BUILD</code>, <code>BARS_HOOKA</code>, <code>BARS_BREAK</code>, <code>BARS_HOOKB</code>: 4, 4, 4, 4, 7</td>
+</tr>
+
+<tr>
+<td class="org-left">Scene 1's length</td>
+<td class="org-left"><code>DUR</code>, which is <code>SCENE1_DUR</code>: 26 bars</td>
+<td class="org-left">those plus <code>BARS_OUTRO</code> (3), so <code>BAR_SCENE2</code> is 26</td>
+</tr>
+
+<tr>
+<td class="org-left">Scene 2's dive, breach</td>
+<td class="org-left"><code>S2_SPACE_END</code> (5 bars), <code>S2_BREACH</code> (10 bars)</td>
+<td class="org-left"><code>BARS_S2_SPACE</code> (5), <code>BARS_S2_DIVE</code> (5), so <code>BAR_S2_SPLASH</code> is 36</td>
+</tr>
+
+<tr>
+<td class="org-left">Scene 2's length</td>
+<td class="org-left"><code>SCENE2_DUR</code>: 54 bars</td>
+<td class="org-left"><code>BARS_SCENE2</code> + <code>BARS_SCENE3</code>: 18 + 36</td>
+</tr>
+
+<tr>
+<td class="org-left">Scene 2's stretch</td>
+<td class="org-left"><code>S2_SEG</code>'s first three part changes: song bars 44, 51, 60</td>
+<td class="org-left"><code>BAR_SCENE3</code>, <code>BAR_S3_PEAK</code>, <code>BAR_STALK</code></td>
+</tr>
+
+<tr>
+<td class="org-left">Scene 3's white</td>
+<td class="org-left"><code>S3_J0</code>: one bar</td>
+<td class="org-left"><code>BARS_WHITE</code> (1), so <code>BAR_WOODS</code> is 81</td>
+</tr>
+
+<tr>
+<td class="org-left">Scene 3's length</td>
+<td class="org-left"><code>SCENE3_DUR</code>: 59 bars</td>
+<td class="org-left"><code>BARS_JUNGLE</code>: <code>BARS_WHITE</code> + 58</td>
+</tr>
+
+<tr>
+<td class="org-left">Scene 3's cues</td>
+<td class="org-left">the cue table, <code>S3_SEG</code>, <code>S3_HOLD</code></td>
+<td class="org-left"><code>SEC_BAR</code>'s <code>BAR_WOODS</code> + <i>n</i> rows, the footfalls (+31), hops (+42), splashes (+48)</td>
+</tr>
+
+<tr>
+<td class="org-left">The end card</td>
+<td class="org-left"><code>SCENE4_DUR</code> (5 bars), <code>END_LAND</code></td>
+<td class="org-left"><code>BARS_END</code> (5), <code>END_MEL</code></td>
+</tr>
+</tbody>
+</table>
+
+<p>
+In <code>synth.c</code> the <code>S3_</code> and <code>SCENE3</code> names belong to the third movement, Scene
+2's finale, and not to the demo's Scene 3. The jungle's cues are counted there
+in bars of the song after <code>BAR_WOODS</code>, bar 81, where <code>S3_J0</code> ends the white. So
+they include Scene 3's stretch and its hold.
+</p>
+
+<p>
+The jungle's shaders can't see the C constants, so they carry their timing as
+literals. <code>s3j0</code> in the shared block is one bar (1.9354839). The blob's shaders
+subtract the hold as 7.7419355, four bars, and the surf's phase has it as
+6.9677419. Some cues are written as literal jungle seconds too, such as the
+tyrannosaurus's prints in <code>ju_ground.frag</code>. A new tempo or a moved cue has to
+be carried into the GLSL by hand. How to change the music itself is in
+<a href="making-of.html#the-soundtrack">The soundtrack</a>.
+</p>
+</div>
+</div>
+<div id="outline-container-stretched-clocks" class="outline-3">
+<h3 id="stretched-clocks"><span class="section-number-3">10.4.</span> Stretched clocks</h3>
+<div class="outline-text-3" id="text-stretched-clocks">
+<p>
+Scenes 2 and 3 are each choreographed on a story clock of their own and played
+stretched. The story is counted in story bars, and the show gives some of its
+parts more bars of the song than the story has. A slow part, such as a look
+round or a ladybug's walk, plays a little slower and lasts longer, while the
+music keeps its tempo. <code>stretch()</code> in <code>main.c</code> does the conversion for both
+scenes.
+</p>
+
+<p>
+Its table lists the parts in order as pairs: bars of the show, then bars of the
+story. A pair of 8 and 7 plays seven story bars over eight bars of the song, at
+7/8 pace. A 0 ends the table, and the last pace holds on after it.
+<code>stretch(y, seg)</code> takes <i>y</i>, bars of the show since the act's origin, and
+returns bars of the story. <code>unstretch()</code> goes the other way, by bisection.
+</p>
+
+<p>
+The pace never changes in a step. Each change is eased linearly over half a
+bar, from a quarter bar before the part's boundary to a quarter bar after it,
+and the story clock is the integral of that pace. So nothing on screen changes
+speed with a jolt. Outside that half bar, the clock is exactly the
+piecewise-linear one, which gives two guarantees:
+</p>
+
+<ul class="org-ul">
+<li>Each part starts on the bar of the song and the story bar its table gives,
+within 30 ms at the boundary itself.</li>
+<li>In a part played one for one, every bar line of the song is a bar line of
+the story, so whatever the story times to the beat lands on the music's
+beat.</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-scene-2-story-clock" class="outline-3">
+<h3 id="scene-2-story-clock"><span class="section-number-3">10.5.</span> Scene 2's story clock</h3>
+<div class="outline-text-3" id="text-scene-2-story-clock">
+<p>
+Scene 2 runs on its local time until the breach. The underwater act, from
+<code>S2_BREACH</code> to the end of the scene, is choreographed on a story clock.
+<code>uw_u(t)</code> turns scene-local seconds into story seconds since the breach, and
+<code>uw_t(u)</code> turns them back. The blob's path, the scatter of the props, the
+predator, the cameras and every cue of the act (<code>ENC_IN</code>, <code>PANIC_IN</code>,
+<code>TRANS_IN</code>, <code>FLIGHT_IN</code> and the rest) are written in story seconds. The whole
+story is <code>UW_SPAN</code>, 104.5 story seconds, divided into 40 story bars of
+<code>UW_BAR</code>, 2.6125 s.
+</p>
+
+<p>
+A story bar isn't the song's bar. It's 2.6125 story seconds long and plays over
+at least one bar of the song, 1.935 s. So even in a part played one for one,
+story seconds pass 1.35 times as fast as the show's. Treat a story time as a
+place in the act, not a length of time, and convert it with <code>uw_t()</code> before
+you compare it with the music.
+</p>
+
+<p>
+The act's 44 bars of the song hold its 40 story bars. <code>S2_SEG</code> splits them into
+six parts, the first three at the music's section changes:
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Part</th>
+<th scope="col" class="org-right">Song bars</th>
+<th scope="col" class="org-right">Story bars</th>
+<th scope="col" class="org-left">Pace</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">The deep</td>
+<td class="org-right">36-44</td>
+<td class="org-right">0-7</td>
+<td class="org-left">8 for 7</td>
+</tr>
+
+<tr>
+<td class="org-left">The clearing, in the third movement</td>
+<td class="org-right">44-51</td>
+<td class="org-right">7-13</td>
+<td class="org-left">7 for 6</td>
+</tr>
+
+<tr>
+<td class="org-left">The anthem, up to the predator</td>
+<td class="org-right">51-60</td>
+<td class="org-right">13-21</td>
+<td class="org-left">9 for 8</td>
+</tr>
+
+<tr>
+<td class="org-left">The stalk and the chase</td>
+<td class="org-right">60-66</td>
+<td class="org-right">21-27</td>
+<td class="org-left">6 for 6</td>
+</tr>
+
+<tr>
+<td class="org-left">The transformation</td>
+<td class="org-right">66-71</td>
+<td class="org-right">27-31</td>
+<td class="org-left">5 for 4</td>
+</tr>
+
+<tr>
+<td class="org-left">The flight and the burn-out</td>
+<td class="org-right">71-80</td>
+<td class="org-right">31-40</td>
+<td class="org-left">1 for 1</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+The stalk and the chase play one for one so that the heartbeat's kick stays on
+the near miss. <code>ENC_PEAK</code>, at 64 story seconds, lands at 122.9 s, on the third
+beat of bar 63.
+</p>
+
+<p>
+Only the choreography is stretched. In Scene 2 the Frame block's <code>uTime</code> is
+scene-local seconds, so the water, the fish's swimming and everything else that
+simply moves runs at the show's own speed. The shaders that need the story,
+such as the reef bed and the big school, get <code>uw_u()</code> of the frame's time in a
+uniform.
+</p>
+</div>
+</div>
+<div id="outline-container-scene-3-jungle-clock" class="outline-3">
+<h3 id="scene-3-jungle-clock"><span class="section-number-3">10.6.</span> Scene 3's jungle clock</h3>
+<div class="outline-text-3" id="text-scene-3-jungle-clock">
+<p>
+Scene 3 is choreographed in jungle seconds, counted from the end of the white.
+Its cues, from <code>S3_UP</code> at 7 bars to <code>S3_END</code> at 54, are written as whole bars
+of <code>BAR_S</code>, so a jungle bar is as long as the song's bar.
+</p>
+
+<p>
+<code>render_scene3</code> stretches the time once, at its top. The scene-local time <i>t</i>
+becomes <code>S3_J0 + BAR_S * stretch((t - S3_J0) / BAR_S, S3_SEG)</code>, and <code>s3_setup</code>
+sets <code>c-&gt;j</code> to that minus <code>S3_J0</code>. The Frame block's <code>uTime</code> gets the stretched
+time too, so every package and every jungle shader sees story time, and a
+shader gets jungle seconds as <code>uTime - s3j0</code>. The look round's pace applies
+before it as well, so during the white <code>c-&gt;j</code> runs from -1.69 to 0. The jungle
+is drawn under the white, unseen, from -0.5, the white's last 0.57 s.
+</p>
+
+<p>
+<code>S3_SEG</code> stretches the forest. From the beach's hush on, the story runs one
+for one, four bars behind the song:
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Part</th>
+<th scope="col" class="org-right">Song bars</th>
+<th scope="col" class="org-right">Jungle bars</th>
+<th scope="col" class="org-left">Pace</th>
+<th scope="col" class="org-left">Ends on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">The look round</td>
+<td class="org-right">81-89</td>
+<td class="org-right">0-7</td>
+<td class="org-left">8 for 7</td>
+<td class="org-left"><code>S3_UP</code></td>
+</tr>
+
+<tr>
+<td class="org-left">The canopy</td>
+<td class="org-right">89-94</td>
+<td class="org-right">7-11</td>
+<td class="org-left">5 for 4</td>
+<td class="org-left"><code>S3_FIND</code></td>
+</tr>
+
+<tr>
+<td class="org-left">The way down to the hero plant</td>
+<td class="org-right">94-97</td>
+<td class="org-right">11-14</td>
+<td class="org-left">3 for 3</td>
+<td class="org-left"><code>S3_MACRO</code></td>
+</tr>
+
+<tr>
+<td class="org-left">The ladybug</td>
+<td class="org-right">97-105</td>
+<td class="org-right">14-21</td>
+<td class="org-left">8 for 7</td>
+<td class="org-left"><code>S3_FLY</code></td>
+</tr>
+
+<tr>
+<td class="org-left">The take-off</td>
+<td class="org-right">105-107</td>
+<td class="org-right">21-23</td>
+<td class="org-left">2 for 2</td>
+<td class="org-left"><code>S3_ROAM</code></td>
+</tr>
+
+<tr>
+<td class="org-left">The glide</td>
+<td class="org-right">107-111</td>
+<td class="org-right">23-26</td>
+<td class="org-left">4 for 3</td>
+<td class="org-left"><code>S3_GAP</code></td>
+</tr>
+
+<tr>
+<td class="org-left">The beach, to the end</td>
+<td class="org-right">111-139</td>
+<td class="org-right">26-54</td>
+<td class="org-left">1 for 1</td>
+<td class="org-left"><code>S3_END</code></td>
+</tr>
+</tbody>
+</table>
+
+<p>
+From bar 111 on, show time is <code>SCENE3_START</code> + <code>S3_J0</code> + four bars + <code>j</code>, which
+is 164.516 s + <code>j</code>.
+</p>
+
+<p>
+<code>S3_HOLD</code> is a pause written into the cues, not a stretch. As the
+tyrannosaurus turns away and resumes walking (<code>S3_SHORE</code>, 31 jungle bars), the
+camera stays crouched for four more bars. Every later cue is its bar plus
+<code>S3_HOLD</code>: <code>S3_CLEAR</code>, <code>S3_BLOB</code>, <code>S3_END</code> and the blob's first hop (<code>JO_HOP0</code>
+in <code>s3_blob.c</code>). The blob's and the surf's shaders count their own cues from
+before the hold and subtract it as a literal. So a change to <code>S3_HOLD</code> moves
+Scene 3's length, the synth's later cues and those shaders, all together.
+</p>
+</div>
+</div>
+<div id="outline-container-the-main-beats-in-show-time" class="outline-3">
+<h3 id="the-main-beats-in-show-time"><span class="section-number-3">10.7.</span> The main beats in show time</h3>
+<div class="outline-text-3" id="text-the-main-beats-in-show-time">
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Show time</th>
+<th scope="col" class="org-right">Song bar</th>
+<th scope="col" class="org-left">Beat</th>
+<th scope="col" class="org-left">Set by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">0.0 s</td>
+<td class="org-right">0</td>
+<td class="org-left">Scene 1 opens on the seed (the intro)</td>
+<td class="org-left">&nbsp;</td>
+</tr>
+
+<tr>
+<td class="org-left">7.7 s</td>
+<td class="org-right">4</td>
+<td class="org-left">the bang, on the first kick (the build)</td>
+<td class="org-left"><code>T_BANG</code></td>
+</tr>
+
+<tr>
+<td class="org-left">15.5 s</td>
+<td class="org-right">8</td>
+<td class="org-left">hook A</td>
+<td class="org-left"><code>T_HOOKA</code></td>
+</tr>
+
+<tr>
+<td class="org-left">23.2 s</td>
+<td class="org-right">12</td>
+<td class="org-left">the breakdown</td>
+<td class="org-left"><code>T_BREAK</code></td>
+</tr>
+
+<tr>
+<td class="org-left">31.0 s</td>
+<td class="org-right">16</td>
+<td class="org-left">hook B</td>
+<td class="org-left"><code>T_HOOKB</code></td>
+</tr>
+
+<tr>
+<td class="org-left">32.7 s</td>
+<td class="org-right">&nbsp;</td>
+<td class="org-left">the logo assembles</td>
+<td class="org-left"><code>T_LOGO_IN</code></td>
+</tr>
+
+<tr>
+<td class="org-left">44.5 s</td>
+<td class="org-right">23</td>
+<td class="org-left">the outro, and the collapse from 44.6 s</td>
+<td class="org-left"><code>T_OUTRO</code>, <code>T_COLLAPSE</code></td>
+</tr>
+
+<tr>
+<td class="org-left">49.2 s</td>
+<td class="org-right">&nbsp;</td>
+<td class="org-left">black round the seed</td>
+<td class="org-left"><code>T_BLACK</code></td>
+</tr>
+
+<tr>
+<td class="org-left">50.3 s</td>
+<td class="org-right">26</td>
+<td class="org-left">Scene 2: space (the second movement)</td>
+<td class="org-left"><code>SCENE2_START</code></td>
+</tr>
+
+<tr>
+<td class="org-left">60.0 s</td>
+<td class="org-right">31</td>
+<td class="org-left">the dive</td>
+<td class="org-left"><code>S2_SPACE_END</code></td>
+</tr>
+
+<tr>
+<td class="org-left">64.9 s</td>
+<td class="org-right">&nbsp;</td>
+<td class="org-left">through the cloud deck</td>
+<td class="org-left"><code>S2_CLOUDFLASH</code></td>
+</tr>
+
+<tr>
+<td class="org-left">69.7 s</td>
+<td class="org-right">36</td>
+<td class="org-left">the breach: under the water</td>
+<td class="org-left"><code>S2_BREACH</code>, story 0 s</td>
+</tr>
+
+<tr>
+<td class="org-left">85.2 s</td>
+<td class="org-right">44</td>
+<td class="org-left">the clearing, as the third movement begins</td>
+<td class="org-left">story 18.3 s</td>
+</tr>
+
+<tr>
+<td class="org-left">98.7 s</td>
+<td class="org-right">51</td>
+<td class="org-left">the anthem's peak</td>
+<td class="org-left">story 34.0 s</td>
+</tr>
+
+<tr>
+<td class="org-left">116.1 s</td>
+<td class="org-right">60</td>
+<td class="org-left">the stalk's heartbeat</td>
+<td class="org-left">&nbsp;</td>
+</tr>
+
+<tr>
+<td class="org-left">117.0 s</td>
+<td class="org-right">&nbsp;</td>
+<td class="org-left">the predator comes out of the murk</td>
+<td class="org-left"><code>ENC_IN</code>, story 56 s</td>
+</tr>
+
+<tr>
+<td class="org-left">122.9 s</td>
+<td class="org-right">&nbsp;</td>
+<td class="org-left">the near miss</td>
+<td class="org-left"><code>ENC_PEAK</code>, story 64 s</td>
+</tr>
+
+<tr>
+<td class="org-left">123.9 s</td>
+<td class="org-right">64</td>
+<td class="org-left">the chase, with the full anthem</td>
+<td class="org-left">&nbsp;</td>
+</tr>
+
+<tr>
+<td class="org-left">129.1 s</td>
+<td class="org-right">&nbsp;</td>
+<td class="org-left">the transformation</td>
+<td class="org-left"><code>TRANS_IN</code>, story 72 s</td>
+</tr>
+
+<tr>
+<td class="org-left">139.7 s</td>
+<td class="org-right">&nbsp;</td>
+<td class="org-left">the flight</td>
+<td class="org-left"><code>FLIGHT_IN</code>, story 84 s</td>
+</tr>
+
+<tr>
+<td class="org-left">149.0 s</td>
+<td class="org-right">77</td>
+<td class="org-left">the third movement's outro</td>
+<td class="org-left">&nbsp;</td>
+</tr>
+
+<tr>
+<td class="org-left">152.3 s</td>
+<td class="org-right">&nbsp;</td>
+<td class="org-left">the burn-out to white</td>
+<td class="org-left"><code>S2_END_FADE</code></td>
+</tr>
+
+<tr>
+<td class="org-left">154.8 s</td>
+<td class="org-right">80</td>
+<td class="org-left">Scene 3: the white (the fourth movement)</td>
+<td class="org-left"><code>SCENE3_START</code></td>
+</tr>
+
+<tr>
+<td class="org-left">156.8 s</td>
+<td class="org-right">81</td>
+<td class="org-left">the jungle opens</td>
+<td class="org-left"><code>S3_J0</code>, jungle 0 s</td>
+</tr>
+
+<tr>
+<td class="org-left">172.3 s</td>
+<td class="org-right">89</td>
+<td class="org-left">up to the canopy</td>
+<td class="org-left"><code>S3_UP</code>, jungle 13.5 s</td>
+</tr>
+
+<tr>
+<td class="org-left">181.9 s</td>
+<td class="org-right">94</td>
+<td class="org-left">down and round to the hero plant</td>
+<td class="org-left"><code>S3_FIND</code>, jungle 21.3 s</td>
+</tr>
+
+<tr>
+<td class="org-left">187.7 s</td>
+<td class="org-right">97</td>
+<td class="org-left">in close on the ladybug</td>
+<td class="org-left"><code>S3_MACRO</code>, jungle 27.1 s</td>
+</tr>
+
+<tr>
+<td class="org-left">203.2 s</td>
+<td class="org-right">105</td>
+<td class="org-left">the ladybug takes off</td>
+<td class="org-left"><code>S3_FLY</code>, jungle 40.6 s</td>
+</tr>
+
+<tr>
+<td class="org-left">207.1 s</td>
+<td class="org-right">107</td>
+<td class="org-left">the glide</td>
+<td class="org-left"><code>S3_ROAM</code>, jungle 44.5 s</td>
+</tr>
+
+<tr>
+<td class="org-left">214.8 s</td>
+<td class="org-right">111</td>
+<td class="org-left">a glimpse of the beach, and the music's dark warning</td>
+<td class="org-left"><code>S3_GAP</code>, jungle 50.3 s</td>
+</tr>
+
+<tr>
+<td class="org-left">216.8 s</td>
+<td class="org-right">112</td>
+<td class="org-left">the tyrannosaurus's first footfall</td>
+<td class="org-left"><code>S3_REX</code>, jungle 52.3 s</td>
+</tr>
+
+<tr>
+<td class="org-left">224.5 s</td>
+<td class="org-right">116</td>
+<td class="org-left">it turns away and begins its departure</td>
+<td class="org-left"><code>S3_SHORE</code>, jungle 60.0 s</td>
+</tr>
+
+<tr>
+<td class="org-left">232.3 s</td>
+<td class="org-right">120</td>
+<td class="org-left">we step out (the relief)</td>
+<td class="org-left"><code>S3_CLEAR</code>, jungle 67.7 s</td>
+</tr>
+
+<tr>
+<td class="org-left">236.1 s</td>
+<td class="org-right">122</td>
+<td class="org-left">the blob rises out of the surf</td>
+<td class="org-left"><code>S3_BLOB</code>, jungle 71.6 s</td>
+</tr>
+
+<tr>
+<td class="org-left">245.8 s</td>
+<td class="org-right">127</td>
+<td class="org-left">the blob waves</td>
+<td class="org-left">jungle 81.3 s</td>
+</tr>
+
+<tr>
+<td class="org-left">249.7 s</td>
+<td class="org-right">129</td>
+<td class="org-left">the play in the swash</td>
+<td class="org-left">jungle 85.2 s</td>
+</tr>
+
+<tr>
+<td class="org-left">261.3 s</td>
+<td class="org-right">135</td>
+<td class="org-left">the cadence home</td>
+<td class="org-left">jungle 96.8 s</td>
+</tr>
+
+<tr>
+<td class="org-left">267.0 s</td>
+<td class="org-right">&nbsp;</td>
+<td class="org-left">the fade to black</td>
+<td class="org-left"><code>S3_OUT</code>, jungle 102.5 s</td>
+</tr>
+
+<tr>
+<td class="org-left">269.0 s</td>
+<td class="org-right">139</td>
+<td class="org-left">the end card (the coda)</td>
+<td class="org-left"><code>SCENE4_START</code></td>
+</tr>
+
+<tr>
+<td class="org-left">278.7 s</td>
+<td class="org-right">144</td>
+<td class="org-left">the end</td>
+<td class="org-left"><code>TOTAL_DUR</code></td>
+</tr>
+</tbody>
+</table>
+
+<p>
+<a href="making-of.html#timeline">The making-of's timeline</a> and its scene
+sections describe what happens on screen between these beats, and
+<a href="making-of.html#the-soundtrack">its soundtrack section</a> what the music
+does.
+</p>
+</div>
+</div>
+<div id="outline-container-the-dev-transport" class="outline-3">
+<h3 id="the-dev-transport"><span class="section-number-3">10.8.</span> The dev transport</h3>
+<div class="outline-text-3" id="text-the-dev-transport">
+<p>
+The windowed dev build lets you take the clock over. SPACE pauses, LEFT and
+RIGHT jump 5 s back or forward, and UP and DOWN double or halve the speed,
+between 1/8 and 4 times. The first key press switches the picture from the
+audio clock to a manual timeline. It starts where the clock was, and then
+advances with the wall clock times the speed. Each press logs the new show
+time, the speed, and the name of the section the time falls in, from the
+<code>SECTIONS[]</code> table in <code>main.c</code>.
+</p>
+
+<p>
+The music isn't moved. Once the transport has the clock, the song plays on from
+where it was, and the picture and the music part company. Use it to look at the
+picture, and judge the sync on a run you haven't touched. Seeking past the end
+stops the music, as reaching the end does, and it doesn't come back when you
+seek earlier.
+</p>
+
+<p>
+Seeking backwards is safe for the picture. Scene 1's collision sim only runs
+forward, in fixed steps, so on a step back <code>sim_seek</code> reseeds it and replays it
+from the start to the new time. The transport is compiled only into the windowed dev build.
+The release, headless and capture builds have none of it, and the shipped file
+pays nothing for it.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-the-demo-as-a-case-study" class="outline-2">
+<h2 id="the-demo-as-a-case-study"><span class="section-number-2">11.</span> The demo as a case study</h2>
+<div class="outline-text-2" id="text-the-demo-as-a-case-study">
+<p>
+<code>demos/hello-world/main.c</code> uses almost all of the engine, which makes it the
+best documentation the engine has. <a href="making-of.html">The making-of</a> takes
+it apart scene by scene, with the end card and
+<a href="making-of.html#the-soundtrack">the soundtrack</a>.
+This section is about how the demo's code sits on the engine.
+</p>
+
+<p>
+<code>main.c</code> holds Scene 1, Scene 2 and the end card, the three mains and the dev
+transport. It includes <code>scene3.c</code>, so the jungle is part of the same
+translation unit. Scene 3 is split into eight packages, each with one C file
+and one shader prefix, which plug into a shared world and a per-frame context
+and draw once per pass (see
+<a href="making-of.html#how-it-put-together">How it's put together</a>).
+</p>
+
+<p>
+Every program the demo draws with is listed once, in a manifest.
+<code>programs.def</code> lists the programs of Scenes 1 and 2 and includes <code>scene3.def</code>,
+which includes each package's <code>s3_&lt;pkg&gt;.def</code>. One X-macro over that list gives
+the <code>Demo</code> struct an <code>mc_shader</code> field per program. Startup, hot reload, the
+link checks and teardown walk the same list, so a new program needs no code of
+its own.
+</p>
+
+<p>
+A few conventions run across the scenes. The fourth channel of an
+instance's colour is a code that <code>object.frag</code> reads: glow from 0 up, the
+crowd's softer glow from -0.3 to -1.6, and an air bubble at -4, tested as
+anything under -3 (see <a href="making-of.html#lighting-object-frag">Lighting</a>).
+The jungle's shaders share blocks of GLSL byte for byte, which keeps them in
+the same light and costs the packer almost nothing.
+</p>
+</div>
+<div id="outline-container-what-the-load-makes" class="outline-3">
+<h3 id="what-the-load-makes"><span class="section-number-3">11.1.</span> What the load makes</h3>
+<div class="outline-text-3" id="text-what-the-load-makes">
+<p>
+Nothing the demo draws comes from a data file. Most of its geometry is grown in
+vertex shaders (see
+<a href="#building-geometry-out-of-arithmetic">Building geometry out of arithmetic</a>),
+and the load makes the rest on the GPU:
+</p>
+
+<ul class="org-ul">
+<li>The demo's 32³ noise volume comes first. It sits on unit 1's 3D binding for
+every scene, so the shaders' value noise is a single fetch.</li>
+<li>The creature kit (<code>jr.comp</code>) sculpts five animals: Scene 2's fish, crab,
+predator and whale, and Scene 3's tyrannosaurus. Each is a smooth union of
+round cones, ellipsoids and fins on a grid of its own (5 cm for the
+tyrannosaurus), meshed with surface nets. Each vertex is tagged with the two
+bones that hold it.</li>
+<li>The kit writes the meshes straight into GPU buffers: one vertex buffer for
+all five, bound for good on storage-buffer binding 5, and an index buffer
+each, whose triangle count is read back. <code>jr.vert</code> and <code>fish.vert</code> then pose
+and draw them as ordinary meshes. The kit takes about 60 ms of GPU time.</li>
+<li><code>uwplace.comp</code> works out Scene 2's sand and boulder, then places every
+boulder, weed blade, coral head and crab, checking clearance against the
+blob, camera and predator paths and resolving conflicts between props.
+Each prop grows in where the camera can't see it. The current cell recipe
+shares its scatter rules; the 18 larger landmarks and all 21 placement
+passes remain. The earlier 64,365-byte version took about 155 ms for this
+work.</li>
+<li>Scene 3 bakes its bark, leaf and sand tiles, and an impostor atlas of four of
+its trees for the far forest. The warm-up also draws its two still sun maps,
+which the release build keeps. They always show the world at one frozen
+moment, half a jungle second before the jungle opens, whichever frame draws
+them.</li>
+</ul>
+
+<p>
+The shaders name every texture unit with <code>layout(binding = N)</code>, so no C code
+sets a sampler uniform. <a href="making-of.html#what-draws-it">Scene 2</a> and
+<a href="making-of.html#scene-3-the-jungle">Scene 3</a> have the details.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-getting-it-under-64k" class="outline-2">
+<h2 id="getting-it-under-64k"><span class="section-number-2">12.</span> Getting it under 64k</h2>
+<div class="outline-text-2" id="text-getting-it-under-64k">
+<p>
+<a href="pipeline.html">The pipeline</a> covers this in full: the build flavours,
+every flag and tool, and the size numbers. In short, the 64k budget applies to
+the packed file you run, <code>hello-world.bin</code>, which is 63,237 bytes, with 2,299
+to spare. The release ELF inside it is 241,936 bytes, and it's never shipped.
+Five steps get from one to the other:
+</p>
+
+<ul class="org-ul">
+<li>The release build compiles for size, with <code>-Oz -flto</code> and flags that drop
+what a demo doesn't need. Some of the flags were picked by measuring their
+effect on the packed stream (see
+<a href="pipeline.html#the-size-flags-grouped">The size flags, grouped</a>).</li>
+<li>The payload brings its own <code>_start</code> and imports every libc, libm, X11, ALSA
+and EGL function by a hash of its name, so no symbol names ship (see
+<a href="pipeline.html#keeping-libc-dropping-the-crt-and-the-import-table">Keeping libc</a>).</li>
+<li>The 66 shader files are minified and baked into the executable as one blob,
+with the repeated blocks of GLSL stored once (see
+<a href="pipeline.html#genshaders-py-bake-shaders-into-headers"><code>genshaders.py</code></a>).</li>
+<li>At the payload's link, <code>fpround.py</code> rounds the float constants to values the
+packer can predict. Then <code>elfshrink.py</code> trims what a loader never reads.</li>
+<li><code>mkelf.sh</code> packs the ELF with a context-mixing coder whose model is searched
+per payload. The launcher decodes it in memory and runs it with
+<code>memfd_create</code> and <code>execveat</code>, with no shell and no temp file (see
+<a href="pipeline.html#mkelf-sh-pack-py-cm-h-s2dec-s-mcstub-c-s1dec-s-the-elf-self-extractor">the self-extractor</a>).</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-the-easy-door-tiny64" class="outline-2">
+<h2 id="the-easy-door-tiny64"><span class="section-number-2">13.</span> The easy door: tiny64</h2>
+<div class="outline-text-2" id="text-the-easy-door-tiny64">
+<p>
+The engine makes you set everything up yourself, which is a lot of work if all
+you want is a shader on screen. <code>include/microcosm/tiny64.h</code> is a header-only
+facade over the public API for that case. It opens the window, compiles your
+fragment shader against the engine's full-screen-triangle vertex shader, caches
+uniform locations by name and draws. It's a single-pass canvas without HDR or
+post-processing, and when you want more you move to the full <code>mc_render.h</code> API.
+<a href="tutorial.html#0-the-ten-line-version-tiny64">The tutorial</a> starts with
+it, and <a href="toolkit.html#the-easy-path-tiny64-h">the toolkit reference</a>
+lists its calls.
+</p>
+</div>
+</div>
+<div id="outline-container-determinism" class="outline-2">
+<h2 id="determinism"><span class="section-number-2">14.</span> Determinism</h2>
+<div class="outline-text-2" id="text-determinism">
+<p>
+A lot depends on the demo being deterministic. The RNG is seeded with fixed
+constants, Scene 1's collision sim runs at a fixed timestep, and the synth is a
+pure function of its seed. So the same build produces the same frames and the
+same audio every time. A headless build (<code>-DMC_HEADLESS</code>) renders frames to
+PNGs through the surfaceless backend at a fixed list of show times, so a visual
+regression shows up as a diff.
+</p>
+
+<p>
+The frames of a run aren't independent of each other, though. State left by
+one frame, such as the levels of detail chosen or the canopy's flecks, carries
+over to the next. So a before-and-after pair has to come from runs given the
+same list of times. On the UHD 620, a few of Scene 3's stills differ between
+runs by 3-6 pixels of at most 1 level. That has been traced to <code>ju_plant</code>'s
+lighting, but the cause wasn't found, so comparisons there allow for that
+noise.
+</p>
+
+<p>
+Only the payload's link rounds the float constants (see
+<a href="pipeline.html#fpround-py-the-float-constants-rounded"><code>fpround.py</code></a>),
+and the headless and check builds keep them as written. Their frames therefore
+differ from the shipped binary's by sub-pixel amounts, and Scene 1's sim plays
+out a little differently, though each build is deterministic on its own.
+</p>
+
+<p>
+The dev build compiles with <code>-Wall -Wextra -Wshadow -Wpointer-arith
+-Wstrict-prototypes</code>, and the engine's own sources build without a warning.
+</p>
+</div>
+</div>
+<div id="outline-container-decisions-id-defend" class="outline-2">
+<h2 id="decisions-id-defend"><span class="section-number-2">15.</span> Decisions I'd defend</h2>
+<div class="outline-text-2" id="text-decisions-id-defend">
+<p>
+Some of the choices here are ones people argue about, so these are the reasons
+for them.
+</p>
+
+<p>
+The demo uses OpenGL rather than Vulkan or D3D12. For a size-constrained
+real-time program the older API is the better tool. Classic GL lets the driver
+own the state machine, the allocations and the synchronisation, which is
+megabytes of functionality for the cost of a few function calls. Vulkan and
+D3D12 hand that machinery back to you as explicit pipelines, descriptor
+layouts, memory heaps and a bytecode shader toolchain. All of it turns into
+bytes in your binary and pages of setup before anything draws, and the extra
+control isn't worth that when the aim is to be small. Size-limited intros have
+long been built on this reasoning, and the <code>mc_gl.h</code> header comment gives it
+too. The minimum is GL 4.5 core rather than 3.3. Compute shaders, storage
+buffers, sampler objects and <code>layout(binding)</code> in GLSL each save C code or make
+a technique possible (the animals are meshed and the seabed placed on the
+GPU). They cost one <code>#version</code> line and a few loader entries, and Mesa's
+software rasteriser still provides 4.5. <a href="pipeline.html#why-opengl-and-not-vulkan-or-d3d12">Why OpenGL</a>
+in the pipeline doc goes through what 4.5 brings.
+</p>
+
+<p>
+The release build keeps libc. It's dynamically linked, and although it has its
+own <code>_start</code> and imports by hash, it still calls into libc. You can go further,
+with no libc at all and raw system calls, and get down into single-digit
+kilobytes. But a 64k budget leaves room to write ordinary C, and the packed
+build still has some to spare. For a project that also wants to be a toolkit
+people use, that room is better spent on readable code, and on more scenes,
+than on shaving a startup stub.
+</p>
+
+<p>
+Everything is procedural: the demo has no texture files, mesh files or
+samples. Generators give you detail that compresses to almost nothing. A noise
+function is a few hundred bytes and makes unlimited detail, where a texture is
+a few hundred kilobytes and makes one image. Where a texture is the better
+tool, as for mipmapped detail that holds still at any distance, or a tree drawn
+once into an atlas instead of 240 times, the demo bakes it at load from the
+same noise.
+</p>
+
+<p>
+The sim runs at a fixed timestep. Decoupling it from the frame rate makes it
+deterministic, which in turn makes it testable and seekable. It also means the
+physics behaves the same at 144 Hz on a real GPU as it does when frames are
+captured one at a time on <code>llvmpipe</code>.
+</p>
+
+<hr />
+
+<p>
+See also <a href="toolkit.html">the toolkit reference</a> for each function,
+<a href="pipeline.html">the pipeline doc</a> for the full size story,
+<a href="making-of.html">the making-of</a> for the demo itself, and
+<a href="tutorial.html">the tutorial</a> to build your own.
+</p>
+</div>
+</div>
+</div>
+</body>
+</html>

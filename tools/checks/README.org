@@ -1,0 +1,132 @@
+#+TITLE: Verification and profiling
+
+Run these from the repository root:
+
+#+begin_src sh
+python3 tools/verify.py
+python3 tools/verify.py --profile --width 1280 --height 720 --frames 32
+python3 tools/verify.py --profile --width 1920 --height 1080 --frames 32
+python3 tools/verify.py --profile --no-culling --no-lod
+python3 tools/verify.py --profile --legacy-order
+python3 tools/verify.py --profile --width 1920 --height 1080 --scale 75
+python3 tools/verify.py --sequence --fps 60 --duration 278.6
+python3 tools/checks/build.py
+LIBGL_ALWAYS_SOFTWARE=1 python3 tools/verify.py --width 320 --height 180
+#+end_src
+
+=--out /path/to/evidence= picks the evidence directory. Without it, the runner
+creates one under the system temporary directory and prints its path.
+Everything is kept there for inspection: PPM images, raw and minified shaders,
+logs, compiler and source metadata and, when profiling, a per-frame CSV and
+JSON summaries for each sampled time. You need EGL/OpenGL 4.5, the ALSA
+development headers, a C toolchain, Python 3 and =glslangValidator=. None of
+this adds a Makefile target or a runtime dependency to what ships.
+
+The runner reads =REL_FLAGS= from the current Makefile, bakes the current
+shaders, and drives the demo's real =render_frame= and release geometry. It
+renders at the demo's 80% internal scale unless =--scale= says otherwise. The
+TAA's jitter comes from the frame's time and its history starts over on every
+jump, so each sampled frame starts with no history and frames at the same time
+can be compared. =MC_PROFILE= adds optional counters and GL_TIME_ELAPSED
+queries, and normal builds compile all the hooks out.
+
+GPU query results are read at least eight frames later, and only once they're
+available. If the query ring is full, the sample is dropped and reported rather
+than waited for. The benchmark calls =glFinish= after each frame so that
+whole-frame times are comparable. Startup time includes shader-cache effects,
+so it doesn't measure a cold launch of the packed binary.
+
+The fixed-time samples seek the simulation to their time first, so their
+=simulation_ms= only times a call with nothing left to do. =--sequence= instead
+advances the simulation before every measured frame, counts that work in the
+timing, and groups the summaries into ten-second buckets. =--start=,
+=--duration= and =--fps= set the interval and the fixed time step. It still
+renders synchronised offscreen frames, so it doesn't measure pipelined
+presentation or audio playback.
+
+The fixed samples cover all three scenes: scene 1, four underwater moments, and
+six in the jungle. The jungle ones are the look round (6 s in), the canopy
+(=S3_UP= + 4 s), the ladybug close-up (=S3_MACRO= + 4 s) and the tyrannosaurus
+passing (=S3_REX= + 3.5 s). The last two are the blob coming ashore
+(=S3_BLOB= + 6 s) and the blob at play in the swash with spray in the air
+(=S3_BLOB= + 21.7 s). With the
+release flags, the jungle's two sun shadow maps are drawn only once, so they
+show up in the first jungle sample's =first_ms= and not in the repeats.
+
+The GPU fields split the frame into scene (including the background), shadow,
+AO, AO filtering, bright extraction, rays, bloom, composite, TAA (including the
+present pass) and depth of field. Scene 3's volumetric shafts count as rays,
+and the characters' per-frame sun map counts as shadow. On the CPU side,
+=prepare_ms= includes instance submission, and =upload_cpu_ms= is part of it.
+The CSV counters include draws and triangles, uniform lookups and instance
+upload bytes. Draws made with =glDrawArraysInstanced=, which is how scene 3's
+shader-grown geometry is drawn, aren't in the draw and triangle counts. The GPU
+sums don't match the wall time, because the queries leave out gaps, waits and
+some CPU and driver overhead. The p95/p99 values come from only 32 sampled
+frames, so they're a diagnostic and promise nothing about the tail over the
+whole show. Audio is off while profiling.
+
+The checks exercise long and duplicate tracks, UV propagation, frustum edges
+and a full-song synth render with different block boundaries. They cover
+fake-sink audio recovery and clock bounds, and on the GL side depth texture
+deletion, depth-only FBOs, R8 targets, odd and minimum target sizes and resize
+rollback at each target allocation. They also cover shader failures, terrain
+interpolation, and whether the colour and shadow passes agree on deformed
+depth.
+
+The synth check also compares one bar of the tyrannosaurus's first warning
+with one bar of its close stare: the latter must have at least 1.5 times the
+RMS level, while the full song remains finite, bounded and independent of
+render block size.
+
+The underwater placement fixture reads the compute shader's retained props
+back from the GPU. It checks clearance against the blob, fish schools, camera
+and fitted predator path, the whale's lane, and separation between cell
+boulders. It also checks that all four prop kinds and all three landmark
+categories survive, and checks each late-born prop for the full offscreen
+grow-in interval.
+
+The CPU predator fixture compares the fitted spline with reference poses from
+the original rounded release, checks heading and the near-miss cue, clamps
+before and after the encounter, and samples the whole path at 256 Hz for
+speed and three-sphere clearance from the blob, camera and seabed. Those
+sphere checks do not establish clearance for every vertex of the animal.
+
+The tyrannosaurus fixture counts samples from the actual opaque mesh that
+pass the forest's depth buffer. It checks that the draw starts offscreen,
+the first glimpses grow into a larger reveal, both threat poses have more
+visible coverage than the early glimpse, and the exit is hidden before the
+draw stops.
+
+Twenty images compare culling on and off, both with full rock LOD. They are
+scene 1, nine underwater moments, nine in the jungle and the end card. The
+jungle ones are 3 s and 11 s in, the canopy, the ladybug, the take-off, the
+glimpse of the beach, the tyrannosaurus passing, the blob coming ashore and the
+blob at play. To allow for raster ties, the mean channel error must stay below
+0.02/255 and fewer than 0.1% of channels may change. The frames with LOD on are
+saved too, so the LOD can be checked by eye.
+
+Raw and minified shader pairs are checked by glslang and by the real driver. A
+manifest lists a compute program's one file twice, and the check links that
+file once. The five-fetch blur kernel is checked numerically against the original
+Gaussian. Other checks cover repeated context creation, the 16/32-bit index
+boundary, render-scale rollback and draw counts with post passes disabled.
+There are also checks for periodic material seams, fitted and snapped shadow
+coverage, and whether the original and new draw orders give the same image. A
+separate dev fixture edits shared vertex, fragment and bake dependencies, and
+checks that hot reload rolls back and retries atomically.
+
+The tooling checks cover strict minification, the launcher passing on argv,
+environment and exit status, and the packer's x86 transform (=cmx86.c=). They
+check that the first-stage search charges the serialized model masks and
+weights as well as the coded stream, using empty, repetitive and noisy inputs.
+They also check, with =s2equiv.py=, that the hand-written asm second stage decodes
+bit for bit like the =cm.h= model across a matrix of configurations and inputs.
+A previous packed file must survive invalid input or a failed budget.
+=tools/checks/build.py= separately checks no-op builds, comment-only and real
+shader edits, header dependencies and changed flags.
+
+=make hello-world= is still the check for packed size and decoding. To check
+presentation and audio, run the packed binary in an X11 session. A clean
+offscreen run says nothing about quality on other drivers, hardware audio
+latency, suspend behaviour or recovery on a physical ALSA device.

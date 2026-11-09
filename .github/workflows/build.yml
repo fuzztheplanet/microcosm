@@ -1,0 +1,49 @@
+# Builds "Hello World" from a clean checkout: the debug build and the packed
+# 64k ELF. The build fails if the packed file is over 65,536 bytes. Then it runs
+# the regression checks on Mesa's software rasteriser (llvmpipe).
+# It runs on Arch Linux, which the demo is developed on. The payload's link
+# needs GNU ld 2.43+ (--section-ordering-file), and the packed size is measured
+# with Arch's GCC.
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# The job only reads the repository, so its token can't write anything.
+# Uploading the artifact doesn't use this token.
+permissions:
+  contents: read
+
+jobs:
+  hello-world:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install the toolchain and libraries
+        run: pacman -Syu --noconfirm --needed base-devel git python libx11 libglvnd mesa alsa-lib glslang
+
+      - uses: actions/checkout@v7
+
+      - name: Build (debug build and the packed 64k)
+        run: make hello-world
+
+      - name: Size
+        run: |
+          python3 - <<'PY'
+          import json
+          d = json.load(open('build/hello-world/.release/pack.json'))
+          print(f"hello-world.bin: {d['packed_bytes']:,} / {d['budget']:,} bytes, {d['budget'] - d['packed_bytes']:,} free")
+          PY
+
+      - name: Regression checks (software rendering)
+        run: LIBGL_ALWAYS_SOFTWARE=1 python3 tools/verify.py --width 320 --height 180
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hello-world
+          include-hidden-files: true   # pack.json is under .release/
+          path: |
+            build/hello-world/hello-world.bin
+            build/hello-world/.release/pack.json

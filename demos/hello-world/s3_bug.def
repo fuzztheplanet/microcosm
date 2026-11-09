@@ -1,0 +1,3 @@
+/* scene 3, the hero plant and the ladybug: MC_PROGRAM(field, vs, fs) per program */
+MC_PROGRAM(jb_leaf, "jb_leaf.vert", "jb_leaf.frag")
+MC_PROGRAM(jb_bug, "jb_bug.vert", "jb_bug.frag")

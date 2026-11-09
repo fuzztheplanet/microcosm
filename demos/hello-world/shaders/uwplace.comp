@@ -1,0 +1,381 @@
+#version 450 core
+// Scene 2's seabed, made once at load. Pass -1 (uP) works out the sand's
+// heights and the boulder's vertices, which stay in the buffer for the frames
+// that follow (object.vert and rock.vert read them). Then three steps place
+// every boulder, weed blade, coral head and crab of the underwater act.
+// A candidate's id says where it may stand. The first ids belong to the
+// 34 x 34 cells of the 240 m seabed, 48 slots each. Every cell has the fill:
+// up to two boulders and a clump of weed and coral. Near the middle, where
+// the blob first roams, cells also get mixed loose props and a late coral
+// patch. They share a size and seed-time table. The flight's 18
+// landmarks, 96 slots each, supply the large outcrops, reefs and kelp stands.
+// Pass 0 sites the landmarks beside the flight one after another, each born
+// unseen once the predator has gone. Pass 1 seats every candidate on the sand
+// and keeps it if it clears the blob's whole path, the fish schools (the big
+// school's disc too) and the whale's lane. Boulders must also clear the
+// predator's path and the camera's.
+// The passes after that drop a candidate if it touches a kept neighbour that
+// outranks it. The middle's props outrank the fill, and within each group
+// boulders rank above coral, then crabs, then weed. Between equals the lower
+// id wins. Blades crowd freely.
+// Then each kept prop is timed. It grows in from the first moment after its
+// seed time when the camera stays far from it, or keeps it out of view, for
+// the whole grow-in. It dies when a landmark grows over its spot. Pass 19
+// lists the boulders near each patch of sand for the sand's shade, and works
+// out the reef bed there.
+layout(local_size_x = 64) in;
+layout(std430, binding = 0) buffer B {
+    float H[40401];   // the seabed's heights, 201 x 201 (pass -1)
+    vec4 V[15876];    // the boulder's vertices (position, normal), each LOD 2646 apart (pass -1)
+    vec4 P[820];      // the blob's path
+    vec4 C[838];      // the camera every 0.25 s: position, unit forward
+    vec4 Q[361];      // the predator's path, every 4th sample
+    vec4 S[26];       // the fish schools: centre, ring radius
+    // The output. Per candidate: where + size, turn, colour, (kind, birth,
+    // death, reach). Then per landmark site: (centre, extent, birth; < 0 means
+    // none), (type, members, disc, hues).
+    vec4 O[];
+};
+layout(location = 0) uniform int uP;
+layout(location = 1) uniform vec4 uR;   // unit reaches: boulder (with its crags), coral, crab
+
+const int NC = 34 * 34 * 48, NL = NC + 18 * 96;   // the cells' candidates, then the landmarks'
+const float CELL = 240. / 34.;
+// Shared sizes (min, max) and seed times (earliest, latest): boulders from
+// early on to the end, coral heads and crabs once the water gets richer,
+// and weed throughout. The fill uses smaller rocks and occasional tall weed.
+// Then the corals' hues: pink, orange, purple, yellow, teal, red, rose.
+// They're saturated because the water takes red out first.
+const vec4 LOOSE[4] = vec4[](vec4(.9, 4.6, -20., 90.), vec4(1.3, 3.4, 34., 90.), vec4(.35, .7, 40., 92.), vec4(1.6, 3.2, 3., 96.));
+const vec3 HUE[7] = vec3[](vec3(1., .2, .45), vec3(1., .4, .06), vec3(.6, .12, .95), vec3(1., .78, .06), vec3(.15, .75, .55), vec3(1., .1, .12), vec3(1., .45, .7));
+
+// main.c's mc_hash_u32 (lowbias32), as 0..1. It drives the draws below and the
+// noise.
+float hs(uint x){
+    x = (x ^ x >> 16) * 0x7feb352du;
+    x = (x ^ x >> 15) * 0x846ca68bu;
+    return float((x ^ x >> 16) >> 8) / 16777216.;
+}
+uint s;
+float R(){ return hs(s += 0x9e3779b9u); }
+
+// The engine's mc_noise3 and mc_fbm3 (src/math.c). N is value noise in -1..1
+// on a hashed lattice, each cell blending its corners by Perlin's quintic.
+// F sums o octaves of it, each at twice the frequency and half the weight.
+float N(vec3 p){
+    vec3 i = floor(p), f = p - i, w;
+    f = f * f * f * (f * (f * 6. - 15.) + 10.);
+    float n = 0.;
+    for (int k = 0; k < 8; ++k) {
+        ivec3 c = ivec3(k, k >> 1, k >> 2) & 1;
+        uvec3 h = uvec3(ivec3(i) + c) * uvec3(374761393u, 668265263u, 2147483647u);
+        w = mix(1. - f, f, vec3(c));
+        n += w.x * w.y * w.z * hs(h.x + h.y + h.z + 0x9e3779b9u);
+    }
+    return n * 2. - 1.;
+}
+float F(vec3 p, int o){
+    float n = 0., a = .5;
+    for (int k = 0; k < o; ++k, a *= .5) n += a * N(p * float(1 << k));
+    return n / (1. - a - a);
+}
+// The sand's height at vertex i of the seabed's 201 x 201 grid (x by row, z by
+// column, 1.2 m apart). It's mc_mesh_terrain's six octaves at the offsets
+// UW_TERR_SEED draws, shaped by smoothstep (flat lows, sharp ridges), scaled
+// to 9 m and sunk to UW_FLOOR_BASE.
+float sand(int i){
+    float h = clamp(F(vec3((vec2(i / 201, i % 201) * 1.2 - 120.) * .0125 + vec2(-6.958336, 38.011986), 0.), 6) * .5 + .5, 0., 1.);
+    return 9. * (h * h * (3. - 2. * h) - .35) - 16.;
+}
+// The boulder in direction u: mc_mesh_displace_noise's three layers of five
+// octaves at their seeds' offsets (amplitude 0.42 at frequency 1.3, 0.15 at
+// 3.3, 0.06 at 7.5). Each layer is read where the last one left the surface,
+// and pushes it out along u.
+vec3 rock(vec3 u){
+    u = normalize(u);
+    vec3 p = u + u * .42 * F(u * 1.3 + vec3(-66.634, 9.5166, 85.014), 5);
+    p += u * .15 * F(p * 3.3 + vec3(90.221, 21.554, 85.122), 5);
+    return p + u * .06 * F(p * 7.5 + vec3(-56.044, 17.523, 85.107), 5);
+}
+// Vertex v of a cube's six (n + 1)^2 grids on its surface [-1,1]^3, numbered
+// the way main.c's grid_mesh numbers them. It's blob.vert's cube(), indexed.
+// Every coordinate is worked out the same way, so a vertex two faces share
+// comes out identical.
+vec3 cube(int v, int n){
+    int q = n + 1, f = v / (q * q);
+    vec3 p = vec3(ivec3(n, v % q * 2 - n, v / q % q * 2 - n)) / float(n);
+    p *= .75 + .25 * p * p;
+    p = f < 3 ? p : vec3(-p.xy, p.z);
+    return f % 3 == 0 ? p : f % 3 == 1 ? p.zxy : p.yzx;
+}
+
+// The sand's height at (x, z): uw_floor_y() in main.c, on the same heights.
+float fy(vec2 q){
+    vec2 g = clamp((q + 120.) / 1.2, 0., 199.999), f = fract(g);
+    int a = int(g.x) * 201 + int(g.y);
+    float ya = H[a], yc = H[a + 202], yb = H[a + 1], yd = H[a + 201];
+    return f.y >= f.x ? ya + (yb - ya) * f.y + (yc - yb) * f.x : ya + (yd - ya) * f.x + (yc - yd) * f.y;
+}
+
+// From camera sample k on, the time (s) at which a prop at q with reach e
+// starts its first run of n samples out of sight, or -1 if there's none. Out
+// of sight means over 70 m off (25 m in the murk of the act's first 3 s), or
+// outside the 60-degree cone round the view (which covers the frame) by
+// e + 4. A shorter range of 46 m only worked while the water stayed murky.
+// Once it cleared, a boulder 67 m off could be seen swelling from a dot in
+// half a second.
+float born(vec3 q, float e, int k, int n){
+    for (int r = 0; k < 419; ++k) {
+        vec3 v = q - C[2 * k].xyz;
+        float a = dot(v, C[2 * k + 1].xyz);
+        r = length(v) > (k < 12 ? 25. : 70.) || sqrt(max(dot(v, v) - a * a, 0.)) * .5 - a * .866 > e + 4. ? r + 1 : 0;
+        if (r == n) return float(k - n + 1) * .25;
+    }
+    return -1.;
+}
+
+// Does a prop at q with reach e keep clear of the blob's path and the fish
+// schools, and, when c is set, of the camera's path and the predator's? c is
+// for boulders, which are tall enough to meet those. The circling schools get
+// 2.9 m of extra margin. The big school (the last one, which fish.vert
+// places) is a disc of radius S.w, reaching 3.5 m above and below. A blade is
+// tested as a sphere spanning its height, like a coral or a boulder, so short
+// enough blades may stand under the path and close under a school.
+bool clear(vec3 q, float e, bool c){
+    for (int i = 0; i < 820; ++i) if (distance(q, P[i].xyz) < e + 4.6) return false;
+    for (int i = 0; i < 25; ++i) if (distance(q, S[i].xyz) < e + S[i].w + 2.9) return false;
+    if (distance(q.xz, S[25].xz) < e + S[25].w && abs(q.y - S[25].y) < e + 3.5) return false;
+    for (int i = 0; c && i < 419; ++i) if (distance(q, C[2 * i].xyz) < e + 2.5 || i < 361 && distance(q, Q[i].xyz) < e + 4.6) return false;
+    return true;
+}
+
+vec3 p;            // the prop: where it stands,
+float z, r, b;     // its size (a blade's height), reach and seed time,
+vec4 t, c;         // turn (axis, angle) and colour;
+int K;             // kind: 0 none, 1 boulder, 2 coral, 3 crab, 4 weed
+
+// Seats a prop of size z on the sand at q: a boulder (sat a third into the
+// sand), coral, crab or blade. Boulders are tumbled, and the rest are turned
+// about the vertical.
+void seat(vec2 q, int k){
+    K = k;
+    r = z * (k == 1 ? uR.x : k == 2 ? uR.y : k == 3 ? uR.z : 0.);
+    p = vec3(q.x, fy(q) + z * (k == 1 ? .35 : 0.) + (k == 3 ? .12 : 0.), q.y);
+    t = vec4(k == 1 ? normalize(vec3(R(), R(), R()) - .5) : vec3(0., 1., 0.), R() * 6.2832);
+    c = k == 1 ? vec4(.85, .85, .88, floor(1. + R() * 2.)) : k == 2 ? vec4(HUE[int(R() * 7.)], floor(R() * 4.)) : k == 3 ? vec4(.8, .3, .2, R() * 20.)   // (coral: its form, coral.vert's)
+               : vec4(.7 + .3 * R(), 1., .6, R() * 20.);
+    if (max(abs(q.x), abs(q.y)) > 120. - r) K = 0;
+}
+// Whether the seated prop fits: clear of the path and the schools. A boulder or
+// a coral is tested as it stands (a boulder against the camera and the
+// predator too), and a blade over its height and sway.
+bool fits(){
+    return K < 3 ? clear(p, r, K < 2) : K < 4 || clear(p + vec3(0., z * .5, 0.), z * .5 + .3, false);
+}
+
+// The landmark sites: six outcrops, then six reefs, then six thickets. Each in
+// turn tries points beside the flight (u 85..103) until one keeps apart from
+// the sites before it, has room for its core (an outcrop's huge boulder) and
+// can be born unseen. It gets 99 tries. With born()'s 70 m range, 40 tries
+// left an outcrop out.
+void sites(){
+    for (int k = 0; k < 18; ++k) {
+        int y = k / 6;
+        float x = y == 0 ? 17. : y == 1 ? 11. : 9., sb = -1.;
+        vec2 sc;
+        s = uint(NC + k * 96) * 0x632be5abu + 3u;     // the core's own draws (memb's)
+        R(); R();
+        float k0 = mix(4.4, 5.8, R()) * uR.x;
+        s = uint(k) * 0x632be5abu + 77u;
+        for (int n = 0; n < 99 && sb < 0.; ++n) {
+            int a = int(mix(85., 103., R()) * 7.837);
+            vec2 f = normalize(P[a + 1].xz - P[a].xz);
+            float ah = mix(-4., 45., R()), d = mix(y > 0 ? 10. : 16., y > 0 ? 26. : 36., R()) * sign(R() - .5);
+            sc = P[a].xz + f * ah + vec2(-f.y, f.x) * d;
+            uint q = s;
+            bool ok = max(abs(sc.x), abs(sc.y)) < 120. - x && (y > 0 || clear(vec3(sc.x, fy(sc) + k0 * .35 / uR.x, sc.y), k0, true));
+            s = q;
+            for (int j = 0; j < k && ok; ++j) ok = O[4 * NL + 2 * j].w < 0. || distance(sc, O[4 * NL + 2 * j].xy) >= x + O[4 * NL + 2 * j].z + 2.;
+            sb = ok ? born(vec3(sc.x, fy(sc) + 4., sc.y), x + 8., 320, y == 0 ? 13 : 19) : -1.;
+        }
+        O[4 * NL + 2 * k] = vec4(sc, x, sb);
+        O[4 * NL + 2 * k + 1] = vec4(y, floor(y == 0 ? 9. + R() * 4. : y == 1 ? 56. + R() * 30. : 60. + R() * 30.),
+                                     mix(y == 1 ? 4.6 : 4., y == 1 ? 6.6 : 5.8, R()), floor(R() * 7.) + 8. * floor(R() * 7.));
+    }
+}
+
+// Member m of landmark k, whose core has reach k0. An outcrop is its core
+// boulder with big ones packed in all round it and two perched on top. A reef
+// is coral heads in two hues, ringed by kelp, and a thicket is kelp round a
+// coral heart. The corals lie on a sunflower spiral (the golden angle round,
+// the square root out), so each one touches its neighbours.
+void memb(int k, int m, float k0){
+    vec4 A = O[4 * NL + 2 * k], B = O[4 * NL + 2 * k + 1];
+    int y = int(B.x), o = y == 0 ? (m == 0 ? 0 : float(m) < B.y - 2. ? 1 : 2) : (y == 1 ? float(m) < B.y * .75 : m < 8) ? 3 : y + 3;
+    s = uint(NC + k * 96 + m) * 0x632be5abu + 3u;
+    float a = R() * 6.2832, u = R();
+    vec2 l = o == 0 ? vec2(4.4, 5.8) : o == 1 ? vec2(2.4, 4.2) : o == 2 ? vec2(1.4, 2.4) : o == 3 ? vec2(1.6, 4.) : o == 4 ? vec2(2.8, 5.) : vec2(6., 11.);
+    z = mix(l.x, l.y, R());
+    float d = o == 0 ? 0. : o == 1 ? (k0 + z * uR.x) * (.42 + .2 * u) : o == 2 ? k0 * (.1 + .3 * u) : o == 4 ? B.z + .5 + 1.5 * u
+            : B.z * (o > 3 ? sqrt(u) : sqrt((float(m) + .5) / (y == 1 ? B.y * .75 : 8.)) * (y == 2 ? .45 : 1.));
+    if (o == 3) a = float(m) * 2.3999;
+    seat(A.xy + vec2(cos(a), sin(a)) * d, o < 3 ? 1 : o == 3 ? 2 : 4);
+    if (o == 2) p.y = fy(A.xy) + k0 * (.35 / uR.x + .6);
+    if (o < 3) c.w = float(1 + k % 2);                          // one rock per outcrop
+    if (o == 3) c.rgb = HUE[int(R() < .7 ? mod(B.w, 8.) : B.w / 8.)];
+    b = A.w + R() * .6;
+    if (A.w <= 0. || float(m) >= B.y || d + r > A.z) K = 0;
+}
+
+// Candidate i of the cells: sets the prop (K = 0: none) and its seed time b.
+void cell(int i){
+    int n = i / 48, k = i % 48;
+    vec2 o = (vec2(n % 34, n / 34) + .5) * CELL - 120.;
+    s = uint(n) * 0x9e3779b1u + 1u;                   // the cell's own draws
+    float b0 = mix(60., 88., R()), q = R(), hue = R() * 7.;
+    vec2 w = o + (vec2(R(), R()) - .5) * .7 * CELL;
+    s = uint(i) * 0x632be5abu + 7u;                   // its own
+    int g = k < 2 ? 0 : k < 8 ? 3 : k < 11 ? 1 : k < 34 ? int(R() * 7.) : 1;
+    vec2 j = (vec2(R(), R()) - .5) * CELL;
+    K = 0;
+    if (g > 3 || k < 2 && float(k) >= (q < .06 ? 0. : q < .6 ? 1. : 2.)
+        || k >= 2 && k < 11 && float(k) > 3. + q * 8.
+        || k > 10 && (abs(o.x) > 68. || abs(o.y) > 56. || k > 33 && q > .65)) return;
+    b = k < 11 ? b0 : k < 34 ? max(mix(LOOSE[g].z, LOOSE[g].w, R()), 0.) : mix(66., 94., q);
+    z = mix(LOOSE[g].x, LOOSE[g].y, R()) * (k < 2 ? .7 : g == 3 && q < .15 ? 2. : 1.);
+    // Fill plants and late coral use one shared clump. The middle's mixed
+    // props are spread over the cell; the landmarks make the larger reefs.
+    seat(k >= 2 && (k < 11 || k > 33) ? w + j * .6 : o + j, g + 1);
+    if (k > 33) c.rgb = HUE[int(hue)];
+    if (k > 10 && abs(p.z + 42.) < r + 7.8 || !fits()) K = 0;   // the whale's lane
+}
+
+// Does kept candidate j (its record o) stand in the way of candidate i (seated
+// at p, reach r)? It does if it outranks i and is too close. The rank k is
+// the kind, plus 4 for the fill. Boulders and coral block everything below
+// them. Corals, the fill's too, touch rather than merge. Cell boulders all
+// keep the same gap; the landmark outcrops pack tight. Crabs block only the
+// fill's boulders, and blades block nothing.
+// The exception is a coral patch's head (pi, pj), which grows in late. It makes
+// way for the middle's boulders, coral, crabs and weed, which were all there
+// before it (a blade may stand at its edge). Patch heads pack tighter among
+// themselves and overlap, so a patch forms one mound and nothing that was
+// there before it has to go.
+bool blocks(int i, int k, int j){
+    vec4 o = O[4 * j + 3];
+    int n = int(o.x) + (j % 48 < 11 ? 4 : 0);
+    bool pi = k == 2 && i % 48 > 33, pj = n == 2 && j % 48 > 33;
+    if (o.x == 0. || (pi ? n > 4 || pj && j >= i : n % 4 == 0 || n % 4 == 3 && k != 5 || n > k || pj && k < 5 || n == k && j >= i)) return false;
+    vec3 v = O[4 * j].xyz - p;
+    if (k % 4 != 1 || n % 4 != 1) v.y = 0.;
+    return length(v) < (k % 4 == 2 && n % 4 == 2 ? (pi ? .2 : .32) * (r + o.w) : pi && n == 4 ? r * .9 : r + o.w + .3);
+}
+
+void main(){
+    int i = int(gl_GlobalInvocationID.x);
+    if (uP < 0) {
+        // The sand's heights and the boulder's vertices. The LODs are grids of
+        // 20, 10 and 5 cells a side, 2646 vertices apart. Each vertex gets the
+        // normal of the surface round it (central differences across about a
+        // cell), worked out the same way on every face.
+        if (i < 40401) H[i] = sand(i);
+        if (i < 7938) {
+            int n = 20 >> i / 2646;
+            float e = 1.5 / float(n);
+            vec3 u = normalize(cube(i % 2646, n)), a = normalize(abs(u.y) < .9 ? cross(u, vec3(0., 1., 0.)) : cross(u, vec3(1., 0., 0.))), b = cross(u, a);
+            V[2 * i] = vec4(rock(u), 0.);
+            V[2 * i + 1] = vec4(normalize(cross(rock(u + a * e) - rock(u - a * e), rock(u + b * e) - rock(u - b * e))), 0.);
+        }
+        return;
+    }
+    if (uP == 0) {
+        if (i == 0) sites();
+        return;
+    }
+    if (uP == 1) {
+        K = 0;
+        if (i < NC) cell(i);
+        else if (i < NL) {                            // a landmark's member, round its core
+            memb((i - NC) / 96, 0, 0.);
+            memb((i - NC) / 96, (i - NC) % 96, r);
+            if (!fits()) K = 0;
+        }
+        if (i < NL) {
+            O[4 * i] = vec4(p, z);
+            O[4 * i + 1] = t;
+            O[4 * i + 2] = c;
+            O[4 * i + 3] = vec4(K, i < NC ? 0. : b, 0., r);   // the cells' still undecided
+        }
+        return;
+    }
+    if (uP > 18) {
+        // Pass 19 runs once everything is timed. For the sand's contact shade
+        // (uwsurf.frag) it lists, for each of 68 x 68 squares half a cell
+        // wide, the kept boulders whose shade (1.5 reaches from the centre)
+        // reaches into it. A square holds up to 16 (an outcrop's holds 14).
+        // Each entry is the offset of the boulder's record in the buffer, in
+        // vec4s: O[0] is the buffer's vec4 28022, past the heights' 10101 and
+        // V, P, C, Q, S. A 0 ends the list. The lists come after the landmark
+        // sites' records, 16 floats per square (square i at O[4 NL + 36 + 4 i]).
+        // The vec4s after the lists (square i at O[4 NL + 18532 + i]) hold the
+        // reef bed at the square's centre. x is how much bed the heads of the
+        // coral patches, the landmark reefs and the flight's last fill lay down
+        // there. Each head is a disc fading out from half its reach to twice
+        // it, wider the later it's born, and heads a landmark grows over don't
+        // count. y is when the bed starts. That's the first moment after the
+        // last of those heads is born from which the square stays out of sight
+        // for the whole grow-in, the way born() times the props (1e9 if never).
+        vec2 o = (vec2(i % 68, i / 68) + .5) * CELL * .5 - 120., g = vec2(0.);
+        for (int j = 0, m = i < 4624 ? 0 : 16; j < NL; ++j) {
+            vec4 e = O[4 * j + 3];
+            if (e.x == 1. && e.y < 999. && m < 16 && length(max(abs(O[4 * j].xz - o) - CELL * .25, 0.)) < e.w * 1.5)
+                O[4 * NL + 36 + 4 * i + m / 4][m % 4] = float(28022 + 4 * j), ++m;
+            float w = 1. - smoothstep(.5, 2. + max(e.y - 80., 0.) * .15, distance(O[4 * j].xz, o) / e.w);
+            if (e.x == 2. && e.y < 999. && e.z == 0. && w > 0. && (j % 48 > 33 || j >= NC || e.y > 80.)) g = vec2(g.x + w, max(g.y, e.y));
+        }
+        g.y = born(vec3(o.x, fy(o), o.y), 3., int(g.y * 4.), 17);
+        if (i < 4624) O[4 * NL + 18532 + i].xy = vec2(g.x, g.y < 0. ? 1e9 : g.y);
+        return;
+    }
+    vec4 me = O[4 * i + 3];
+    K = int(me.x);
+    if (i >= NC || K == 0) return;
+    int k = K + (i % 48 < 11 ? 4 : 0), f = uP & 1, cx = i / 48 % 34, cz = i / 48 / 34;
+    float st = f == 0 ? me.y : me.z;
+    p = O[4 * i].xyz;
+    r = me.w;
+    if (uP < 18) {
+        // Passes 2-17 decide which props stand, with the same result as placing
+        // them one by one in rank order. Each pass drops an undecided prop if a
+        // kept prop blocks it, keeps it if nothing that could block it is still
+        // undecided, and otherwise leaves it for the next pass. There are two
+        // copies of the decisions: each pass reads one and writes the other.
+        if (st == 0.)
+            for (int y = max(cz - 4, 0); y <= min(cz + 4, 33) && st >= 0.; ++y)
+                for (int x = max(cx - 4, 0); x <= min(cx + 4, 33); ++x)
+                    for (int j = (y * 34 + x) * 48, e = j + 48; j < e; ++j)
+                        if (blocks(i, k, j)) {
+                            float sj = f == 0 ? O[4 * j + 3].y : O[4 * j + 3].z;
+                            st = sj > 0. ? -1. : sj == 0. && st == 0. ? .5 : st;
+                        }
+        st = st == .5 ? 0. : st == 0. ? 1. : st;
+        if (f == 0) O[4 * i + 3].z = st; else O[4 * i + 3].y = st;
+        return;
+    }
+    // Pass 18 times the kept props. They grow in unseen, from their seed time,
+    // and die where a landmark grows over them.
+    if (st < 1.) { O[4 * i + 3].y = 1e9; return; }
+    cell(i);
+    // A boulder seeded before story second 40 may be born from the start of
+    // the act. One born in its first 3 s, unseen in the murk, stands there
+    // fully grown from the first frame. Without this, at 70 m they would all
+    // be born late, and under the whale's pass (~77-96 s of the show) the
+    // frame would be bare sand.
+    bool E = K == 1 && b < 40.;
+    float bt = born(p, K == 4 ? z : r, E ? 0 : int(b * 4.), K == 1 ? 11 : 17), d = 0.;
+    for (int n = 0; n < 18; ++n) {
+        vec4 A = O[4 * NL + 2 * n], B = O[4 * NL + 2 * n + 1];
+        if (A.w > 0. && distance(p.xz, A.xy) < r + (B.x < .5 ? A.z : B.z + 2.5) && (d == 0. || A.w < d)) d = A.w;
+    }
+    O[4 * i + 3].yz = vec2(bt >= 0. ? bt - (E && bt < 3. ? 3. : 0.) : b < 50. ? b : 1e9, d);   // (seeded late and never unseen: none)
+}

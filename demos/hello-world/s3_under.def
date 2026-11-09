@@ -1,0 +1,3 @@
+/* scene 3, the forest floor and the undergrowth: MC_PROGRAM(field, vs, fs) per program */
+MC_PROGRAM(ju_ground, "ju_ground.vert", "ju_ground.frag")
+MC_PROGRAM(ju_plant, "ju_plant.vert", "ju_plant.frag")

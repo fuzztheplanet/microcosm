@@ -1,0 +1,2 @@
+/* scene 3, the blob come ashore: MC_PROGRAM(field, vs, fs) per program */
+MC_PROGRAM(jo_blob, "jo_blob.vert", "jo_blob.frag")

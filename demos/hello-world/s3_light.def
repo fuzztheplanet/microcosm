@@ -1,0 +1,4 @@
+/* scene 3, the sky, the haze and the light: MC_PROGRAM(field, vs, fs) per program */
+MC_PROGRAM(jl_sky, "jl_full.vert", "jl_sky.frag")
+MC_PROGRAM(jl_atmo, "jl_full.vert", "jl_atmo.frag")
+MC_PROGRAM(jl_vol, "jl_full.vert", "jl_vol.frag")

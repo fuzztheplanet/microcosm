@@ -1,0 +1,58 @@
+#+TITLE: MICROCOSM
+#+SUBTITLE: A 64 KB demo engine and toolkit for x86_64 Linux, written in C11
+#+SETUPFILE: setup.org
+#+OPTIONS: toc:nil num:nil
+
+* What this is
+:PROPERTIES:
+:CUSTOM_ID: what-this-is
+:END:
+
+These pages document MICROCOSM, a small, self-contained demoscene engine. It
+has procedural geometry, an instanced HDR renderer with a full post stack and a
+software synth that uses no samples. Its build pipeline compresses the engine,
+the demo and the soundtrack into one self-extracting ELF of under 64 KB. A
+complete reference demo, "Hello World", comes with it, and the
+[[https://github.com/fuzztheplanet/microcosm#quick-start][README]] at the top of the repository covers building and running it.
+
+* The documents
+:PROPERTIES:
+:CUSTOM_ID: the-documents
+:END:
+
+Read them in this order:
+
+1. [[file:tutorial.org][Tutorial]]: making your own 64k intro with MICROCOSM. It starts with the
+   =tiny64.h= ten-liner and works up to a demo directory of your own and a
+   size-optimised binary.
+2. [[file:toolkit.org][Toolkit reference]]: the public =mc_= API, module by module, with every
+   public type and function, its defaults and conventions, and short examples.
+3. [[file:architecture.org][Internals]]: how each module works and why, the renderer, the frame, and
+   how the picture keeps time with the music.
+4. [[file:pipeline.org][Pipeline]]: how the demo fits in 64 KB. It covers the build flavours,
+   every flag, the numbers, each tool in =tools/= and the video capture.
+5. [[file:making-of.org][Making of "Hello World"]]: the reference demo taken apart on one page. It
+   covers the story and its timeline, how each scene and the end card are
+   drawn, the soundtrack and how to change it.
+6. [[file:publishing.org][Publishing on GitHub]]: the first push, later commits, and releases with
+   the 64k file and the video attached.
+
+* Building the HTML
+:PROPERTIES:
+:CUSTOM_ID: building-the-html
+:END:
+
+These pages are online as HTML at
+[[https://fuzztheplanet.github.io/microcosm/]]. GitHub's own view of the
+=.org= files opens a link to a section of another page at the top of that
+page, and the HTML goes straight to the section. To build the HTML yourself
+you need Emacs. From the top of the repository:
+
+#+begin_src sh
+  make -C docs html
+#+end_src
+
+Then open =docs/index.html=. =make -C docs clean= removes the HTML again.
+After adding a heading, run =make -C docs ids= before the next export to give
+it a =CUSTOM_ID=, the id that links to it use. The =.org= files read fine as
+plain text and in any Org viewer, so the HTML is only a nicer way to read them.

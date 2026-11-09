@@ -1,0 +1,1043 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tutorial: make your own 64k intro with MICROCOSM</title>
+<meta name="generator" content="Org Mode" />
+<style type="text/css">
+  #content { max-width: 60em; margin: auto; }
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #e6e6e6;
+    border-radius: 3px;
+    background-color: #f2f2f2;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: auto;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    top: -8px;
+    right: 12px;
+    padding: 3px;
+    color: #555;
+    background-color: #f2f2f299;
+  }
+  pre.src:hover:before { display: inline; margin-top: 14px;}
+  /* Languages per Org manual */
+  pre.src-asymptote:before { content: 'Asymptote'; }
+  pre.src-awk:before { content: 'Awk'; }
+  pre.src-authinfo::before { content: 'Authinfo'; }
+  pre.src-c:before { content: 'C'; }
+  pre.src-C:before { content: 'C'; }
+  /* pre.src-C++ doesn't work in CSS */
+  pre.src-clojure:before { content: 'Clojure'; }
+  pre.src-css:before { content: 'CSS'; }
+  pre.src-D:before { content: 'D'; }
+  pre.src-ditaa:before { content: 'ditaa'; }
+  pre.src-dot:before { content: 'Graphviz'; }
+  pre.src-calc:before { content: 'Emacs Calc'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-fortran:before { content: 'Fortran'; }
+  pre.src-gnuplot:before { content: 'gnuplot'; }
+  pre.src-haskell:before { content: 'Haskell'; }
+  pre.src-hledger:before { content: 'hledger'; }
+  pre.src-java:before { content: 'Java'; }
+  pre.src-js:before { content: 'JavaScript'; }
+  pre.src-latex:before { content: 'LaTeX'; }
+  pre.src-ledger:before { content: 'Ledger'; }
+  pre.src-lisp:before { content: 'Lisp'; }
+  pre.src-lilypond:before { content: 'Lilypond'; }
+  pre.src-lua:before { content: 'Lua'; }
+  pre.src-matlab:before { content: 'MATLAB'; }
+  pre.src-mscgen:before { content: 'Mscgen'; }
+  pre.src-ocaml:before { content: 'Objective Caml'; }
+  pre.src-octave:before { content: 'Octave'; }
+  pre.src-org:before { content: 'Org mode'; }
+  pre.src-oz:before { content: 'OZ'; }
+  pre.src-plantuml:before { content: 'Plantuml'; }
+  pre.src-processing:before { content: 'Processing.js'; }
+  pre.src-python:before { content: 'Python'; }
+  pre.src-R:before { content: 'R'; }
+  pre.src-ruby:before { content: 'Ruby'; }
+  pre.src-sass:before { content: 'Sass'; }
+  pre.src-scheme:before { content: 'Scheme'; }
+  pre.src-screen:before { content: 'Gnu Screen'; }
+  pre.src-sed:before { content: 'Sed'; }
+  pre.src-sh:before { content: 'shell'; }
+  pre.src-sql:before { content: 'SQL'; }
+  pre.src-sqlite:before { content: 'SQLite'; }
+  /* additional languages in org.el's org-babel-load-languages alist */
+  pre.src-forth:before { content: 'Forth'; }
+  pre.src-io:before { content: 'IO'; }
+  pre.src-J:before { content: 'J'; }
+  pre.src-makefile:before { content: 'Makefile'; }
+  pre.src-maxima:before { content: 'Maxima'; }
+  pre.src-perl:before { content: 'Perl'; }
+  pre.src-picolisp:before { content: 'Pico Lisp'; }
+  pre.src-scala:before { content: 'Scala'; }
+  pre.src-shell:before { content: 'Shell Script'; }
+  pre.src-ebnf2ps:before { content: 'ebfn2ps'; }
+  /* additional language identifiers per "defun org-babel-execute"
+       in ob-*.el */
+  pre.src-cpp:before  { content: 'C++'; }
+  pre.src-abc:before  { content: 'ABC'; }
+  pre.src-coq:before  { content: 'Coq'; }
+  pre.src-groovy:before  { content: 'Groovy'; }
+  /* additional language identifiers from org-babel-shell-names in
+     ob-shell.el: ob-shell is the only babel language using a lambda to put
+     the execution function name together. */
+  pre.src-bash:before  { content: 'bash'; }
+  pre.src-csh:before  { content: 'csh'; }
+  pre.src-ash:before  { content: 'ash'; }
+  pre.src-dash:before  { content: 'dash'; }
+  pre.src-ksh:before  { content: 'ksh'; }
+  pre.src-mksh:before  { content: 'mksh'; }
+  pre.src-posh:before  { content: 'posh'; }
+  /* Additional Emacs modes also supported by the LaTeX listings package */
+  pre.src-ada:before { content: 'Ada'; }
+  pre.src-asm:before { content: 'Assembler'; }
+  pre.src-caml:before { content: 'Caml'; }
+  pre.src-delphi:before { content: 'Delphi'; }
+  pre.src-html:before { content: 'HTML'; }
+  pre.src-idl:before { content: 'IDL'; }
+  pre.src-mercury:before { content: 'Mercury'; }
+  pre.src-metapost:before { content: 'MetaPost'; }
+  pre.src-modula-2:before { content: 'Modula-2'; }
+  pre.src-pascal:before { content: 'Pascal'; }
+  pre.src-ps:before { content: 'PostScript'; }
+  pre.src-prolog:before { content: 'Prolog'; }
+  pre.src-simula:before { content: 'Simula'; }
+  pre.src-tcl:before { content: 'tcl'; }
+  pre.src-tex:before { content: 'TeX'; }
+  pre.src-plain-tex:before { content: 'Plain TeX'; }
+  pre.src-verilog:before { content: 'Verilog'; }
+  pre.src-vhdl:before { content: 'VHDL'; }
+  pre.src-xml:before { content: 'XML'; }
+  pre.src-nxml:before { content: 'XML'; }
+  /* add a generic configuration mode; LaTeX export needs an additional
+     (add-to-list 'org-latex-listings-langs '(conf " ")) in .emacs */
+  pre.src-conf:before { content: 'Configuration File'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .equation-container {
+    display: table;
+    text-align: center;
+    width: 100%;
+  }
+  .equation {
+    vertical-align: middle;
+  }
+  .equation-label {
+    display: table-cell;
+    text-align: right;
+    vertical-align: middle;
+  }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  .org-svg { }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism-themes/1.9.0/prism-one-light.min.css" integrity="sha384-wfpYO27rpeJ2ZOVwfG6TuU4ahxLdxLmGXK/BiSH98jJye0CNNWTOM+kA8rP8Yg4p" crossorigin="anonymous">
+<script>window.Prism = window.Prism || {}; window.Prism.manual = true;</script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/prism.min.js" integrity="sha384-xAgN7OCsK5s0d3G18tqRYrxy8hWsPA14E26TMh7Mi9ZM09vaz4EA0DBTl+80F5yC" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/components/prism-c.min.js" integrity="sha384-gaD4ncierlmWk42Z3BmTp37/z+Dqt8V4Wf74UjTvFeo+M+SgnEI6Ysd98pWhksQv" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/components/prism-bash.min.js" integrity="sha384-9WmlN8ABpoFSSHvBGGjhvB3E/D8UkNB9HpLJjBQFC2VSQsM1odiQDv4NbEo+7l15" crossorigin="anonymous"></script>
+<script>document.addEventListener("DOMContentLoaded", function () {
+if (!window.Prism || !Prism.highlightElement) return;
+/* Org marks blocks as pre.src-LANG > code; Prism wants the class language-LANG on the code element. */
+document.querySelectorAll("pre.src > code").forEach(function (code) {
+var m = code.parentElement.className.match(/\bsrc-(\S+)/);
+if (m && Prism.languages[m[1]]) { code.classList.add("language-" + m[1]); Prism.highlightElement(code); }
+});
+});</script>
+<script>document.addEventListener("DOMContentLoaded", function () {
+/* A pilcrow after each heading links to it. A click puts the link in the URL bar and on the clipboard. */
+document.querySelectorAll("h2[id], h3[id], h4[id]").forEach(function (h) {
+var page = location.pathname.split("/").pop() || "index.html";
+var a = document.createElement("a");
+a.className = "heading-link";
+a.href = "#" + h.id;
+a.title = page + "#" + h.id;
+a.textContent = "¶";
+a.addEventListener("click", function (e) {
+e.preventDefault();
+history.replaceState(null, "", "#" + h.id);
+navigator.clipboard.writeText(location.href).then(function () {
+a.textContent = "✓";
+setTimeout(function () { a.textContent = "¶" }, 1200);
+});
+});
+h.appendChild(a);
+});
+});</script>
+<style> a.heading-link{margin-left:.4em;font-size:.7em;opacity:0;text-decoration:none;vertical-align:middle;transition:opacity .15s} h2:hover a.heading-link,h3:hover a.heading-link,h4:hover a.heading-link{opacity:.6} a.heading-link:hover{opacity:1 !important} </style>
+<style> body{max-width:52em;margin:2em auto;padding:0 1em;line-height:1.55;font-family:Georgia,"Times New Roman",serif;color:#1a1a1a} h1,h2,h3,h4{font-family:-apple-system,Helvetica,Arial,sans-serif;line-height:1.2} pre.src,pre.example{overflow-x:auto;background:#f6f8fa;padding:.6em;border-radius:4px;margin:1.2em} pre.src code{background:none;padding:0;font-size:.8125rem} table{border-collapse:collapse;margin:1em 0} th,td{border:1px solid #ccc;padding:.25em .6em} code{background:#f0f0f0;padding:0 .25em;border-radius:3px} blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:1em;color:#444} a{color:#0645ad} </style>
+</head>
+<body>
+<div id="content" class="content">
+<h1 class="title">Tutorial: make your own 64k intro with MICROCOSM
+<br />
+<span class="subtitle">From a ten-line shader to a size-optimised binary</span>
+</h1>
+<div id="table-of-contents" role="doc-toc">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents" role="doc-toc">
+<ul>
+<li><a href="#0-the-ten-line-version-tiny64">1. 0. The ten-line version (tiny64)</a></li>
+<li><a href="#1-open-a-window-and-make-a-renderer">2. 1. Open a window and make a renderer</a></li>
+<li><a href="#2-build-and-upload-a-mesh">3. 2. Build and upload a mesh</a></li>
+<li><a href="#3-write-a-shader">4. 3. Write a shader</a></li>
+<li><a href="#4-the-begin-draw-end-loop">5. 4. The begin, draw, end loop</a>
+<ul>
+<li><a href="#drawing-a-crowd-instancing">5.1. Drawing a crowd: instancing</a></li>
+</ul>
+</li>
+<li><a href="#5-add-the-synth">6. 5. Add the synth</a></li>
+<li><a href="#6-clean-up">7. 6. Clean up</a></li>
+<li><a href="#the-complete-program">8. The complete program</a>
+<ul>
+<li><a href="#dropping-it-into-demos">8.1. Building it with make</a></li>
+<li><a href="#building-it">8.2. Building it by hand</a></li>
+<li><a href="#scrubbing-while-you-work">8.3. Scrubbing while you work</a></li>
+</ul>
+</li>
+<li><a href="#7-build-for-size">9. 7. Build for size</a></li>
+<li><a href="#what-a-demo-directory-needs">10. What a demo directory needs</a>
+<ul>
+<li><a href="#shaders-on-disk-need-shaders-gen-h">10.1. Shaders on disk need shaders_gen.h</a></li>
+<li><a href="#the-programs-def-manifest">10.2. The programs.def manifest</a></li>
+<li><a href="#mc-imports-h-goes-last">10.3. mc_imports.h goes last</a></li>
+<li><a href="#free-and-realloc">10.4. free and realloc</a></li>
+<li><a href="#hot-reloading-shaders">10.5. Hot-reloading shaders</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<p>
+<a href="index.html">↑ Back to the index</a>
+</p>
+
+<p>
+There are two ways into MICROCOSM, and you should start with the small one.
+</p>
+
+<p>
+If all you want is a fragment shader on screen, such as a plasma, an SDF scene
+or a shadertoy-style experiment, reach for <code>tiny64.h</code>. It's a header-only facade
+over the engine, and it gets you a windowed, animated shader in about ten lines.
+</p>
+
+<p>
+When one shader stops being enough, because you want meshes, a camera,
+instancing, the HDR post stack, a soundtrack or a packed 64k file, drop the
+facade and use the full <code>mc_</code> API. The rest of this tutorial builds that up,
+from an empty file to a size-optimised binary, and ends with what a demo
+directory of your own needs. For a finished example, read
+<code>demos/hello-world/main.c</code> alongside it.
+</p>
+
+<p>
+Prerequisites: a Linux box with the <a href="https://github.com/fuzztheplanet/microcosm#requirements">requirements</a>
+installed, and the MICROCOSM tree. Every command below runs from the top of the
+tree.
+</p>
+<div id="outline-container-0-the-ten-line-version-tiny64" class="outline-2">
+<h2 id="0-the-ten-line-version-tiny64"><span class="section-number-2">1.</span> 0. The ten-line version (tiny64)</h2>
+<div class="outline-text-2" id="text-0-the-ten-line-version-tiny64">
+<div class="org-src-container">
+<pre class="src src-c"><code>#define TINY64_IMPL          // pull in the implementation (exactly one .c)
+#define TINY64_SHORT_NAMES   // running(), swap(), shader(), uniform1f(), ...
+#include &lt;microcosm/tiny64.h&gt;
+
+static const char *FRAG =
+    "#version 450 core\n"
+    "in vec2 uv; out vec4 o; uniform float t;\n"
+    "void main(){ o = vec4(0.5 + 0.5*cos(t + uv.xyx + vec3(0,2,4)), 1.0); }";
+
+int main(void) {
+    if (!t64_open(1280, 720, "hi")) return 1;
+    shader(FRAG);
+    while (running()) {
+        uniform1f("t", (float)t64_time());
+        fullscreen_quad();
+        swap();
+    }
+    t64_close();
+}
+</code></pre>
+</div>
+
+<p>
+That's a complete intro. Your fragment shader gets a full-screen quad, an
+<code>in vec2 uv</code> in <code>[0,1]</code>, and whatever uniforms you set by name with
+<code>t64_set1f</code>, <code>t64_set2f</code> and the rest (or the <code>uniform1f(...)</code> shorthand). It
+leaves out HDR, bloom and meshes, because it's meant for when the shader is the
+whole demo.
+</p>
+
+<p>
+To build it, save it as <code>hi.c</code> at the top of the tree, compile it against the
+engine sources and link the windowed backend. <code>render.c</code> includes the engine's
+post-pass shaders as a generated header, so generate that first:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>python3 tools/genshaders.py --raw --engine src/shaders --engine-output build/inc/mc_engine_shaders.h
+gcc -Iinclude -Ibuild/inc \
+    src/math.c src/gl_loader.c src/platform_common.c \
+    src/mesh.c src/render.c src/scene.c src/platform_x11_egl.c \
+    hi.c -lEGL -lX11 -lm -lpthread -lasound -o hi
+./hi                # ESC to quit
+</code></pre>
+</div>
+
+<p>
+<code>tiny64.h</code> only calls the public engine API, so it links like any other program
+that uses MICROCOSM. The <code>TINY64_SHORT_NAMES</code> macros are opt-in because the bare
+names can collide with ordinary code. <code>time()</code> would clash with <code>&lt;time.h&gt;</code>, so
+it has no short name, and you call <code>t64_time()</code> instead.
+</p>
+
+<p>
+tiny64 is for windowed builds like this one, and it can't be packed into a 64k
+file. The packed payload's compile doesn't declare <code>mc_uniform</code>, <code>mc_set_f</code> or
+<code>mc_set_v3</code>, which tiny64 uses to set uniforms by name, because the payload
+loads no GL call for them. <code>t64_close</code> also calls <code>mc_window_close</code>, which the
+payload leaves out as well, since it just exits. So a tiny64 program saved as
+<code>demos/&lt;name&gt;/main.c</code> gets a dev binary from <code>make &lt;name&gt;</code>, but the release half
+of the build fails to compile. To ship it in 64k, move it to the full API, which
+the rest of this tutorial uses.
+</p>
+</div>
+</div>
+<div id="outline-container-1-open-a-window-and-make-a-renderer" class="outline-2">
+<h2 id="1-open-a-window-and-make-a-renderer"><span class="section-number-2">2.</span> 1. Open a window and make a renderer</h2>
+<div class="outline-text-2" id="text-1-open-a-window-and-make-a-renderer">
+<p>
+Opening a window makes a GL 4.5 core context current and loads the GL function
+table for you. Make the renderer at the window's size, which is its <i>output</i>
+size: the size of the picture <code>mc_renderer_end</code> puts on screen. The HDR scene
+target it draws into has an internal resolution of its own, a percentage of the
+output size set with <code>mc_renderer_set_scale</code> (25-200, and 100 by default).
+Below 100 the post stack's TAA upsamples the picture into its output-size
+history, and above 100 it supersamples. To render at a lower resolution, lower
+the scale rather than making the renderer smaller. A renderer smaller than the
+framebuffer it's resolved into is drawn centred in it with black around it,
+which is how the demo letterboxes a screen of a different shape.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>#include "microcosm/mc_platform.h"
+#include "microcosm/mc_render.h"
+#include "microcosm/mc_mesh.h"
+#include "microcosm/mc_scene.h"
+#include "microcosm/mc_math.h"
+#include "microcosm/mc.h"
+#include &lt;math.h&gt;
+#include "microcosm/mc_imports.h"   // always the last include (see below)
+
+mc_window_desc desc = { .width = 1280, .height = 720,
+                        .title = "my intro", .vsync = 1 };
+mc_window *w = mc_window_open(&amp;desc);
+if (!w) return 1;
+
+mc_renderer *R = mc_renderer_make(1280, 720);        // output: the window's size
+if (!R || !mc_renderer_set_scale(R, 75)) return 1;   // render 960x540; the TAA upsamples
+</code></pre>
+</div>
+
+<p>
+<code>mc_imports.h</code> does nothing until you pack the intro, and then it has to come
+after every other header. <a href="#mc-imports-h-goes-last">mc_imports.h goes last</a>
+explains why.
+</p>
+</div>
+</div>
+<div id="outline-container-2-build-and-upload-a-mesh" class="outline-2">
+<h2 id="2-build-and-upload-a-mesh"><span class="section-number-2">3.</span> 2. Build and upload a mesh</h2>
+<div class="outline-text-2" id="text-2-build-and-upload-a-mesh">
+<p>
+Meshes are built on the CPU (<code>mc_mesh.h</code>) and then uploaded to GPU buffers
+(<code>mc_mesh_upload</code>, in <code>mc_render.h</code>). You can apply as many modifiers as you
+like before uploading, and once the mesh is uploaded you can free the CPU copy.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>mc_mesh m = mc_mesh_icosphere(1.0f, 3);         // radius, subdivisions
+mc_mesh_displace_noise(&amp;m, 0.12f, 1.8f, 0xBEEFu); // make it organic
+mc_gpu_mesh gpu = mc_mesh_upload(&amp;m);
+mc_mesh_free(&amp;m);                                 // GPU has its own copy now
+</code></pre>
+</div>
+
+<p>
+<code>mc_mesh_upload</code> binds vertex attribute 0 to the position and 1 to the normal,
+so your vertex shader should declare those locations. The CPU builders use
+<code>realloc</code> and <code>free</code>, which matters once you pack the intro (see
+<a href="#free-and-realloc">free and realloc</a>).
+</p>
+</div>
+</div>
+<div id="outline-container-3-write-a-shader" class="outline-2">
+<h2 id="3-write-a-shader"><span class="section-number-2">4.</span> 3. Write a shader</h2>
+<div class="outline-text-2" id="text-3-write-a-shader">
+<p>
+<code>mc_shader_make</code> takes GLSL source strings. Scene shaders output linear HDR,
+and the post stack does the tonemapping to sRGB, so don't gamma-correct in your
+shader. Give every uniform you set from C a <code>layout(location = N)</code> that's
+unique within the program (an array takes N, N+1 and so on), and set it by that
+number. Nothing is looked up by name, although <code>mc_uniform</code> can still find a
+uniform that has no location by its name, outside the packed build. A sampler
+on any unit other than 0 gets a <code>layout(binding = N)</code> in the same way, so no C
+code assigns texture units either.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>static const char *VS =
+    "#version 450 core\n"
+    "layout(location=0) in vec3 aPos;"
+    "layout(location=1) in vec3 aNormal;"
+    "layout(location=0) uniform mat4 uViewProj;"
+    "layout(location=1) uniform mat4 uModel;"
+    "out vec3 vN;"
+    "void main(){"
+    "  vN = mat3(uModel) * aNormal;"
+    "  gl_Position = uViewProj * uModel * vec4(aPos, 1.0);"
+    "}";
+
+static const char *FS =
+    "#version 450 core\n"
+    "in vec3 vN; out vec4 o;"
+    "void main(){"
+    "  vec3 L = normalize(vec3(0.4, 0.8, 0.3));"
+    "  float d = max(dot(normalize(vN), L), 0.0);"
+    "  vec3 col = vec3(0.05, 0.06, 0.1) + vec3(1.0, 0.6, 0.3) * d;"
+    "  o = vec4(col, 1.0);"
+    "}";
+
+enum { U_VIEWPROJ = 0, U_MODEL = 1 };   // the shader's uniform locations
+mc_shader sh = mc_shader_make(VS, FS);
+</code></pre>
+</div>
+
+<blockquote>
+<p>
+Strings in C are the simplest way to start. Once the shaders grow, move them
+into files in your own demo's <code>demos/&lt;name&gt;/shaders/</code>, so you can edit them
+while the dev build runs. The release build then bakes them into the binary,
+and your <code>main.c</code> has to fetch them from there
+(<a href="#shaders-on-disk-need-shaders-gen-h">Shaders on disk need shaders_gen.h</a>).
+Reloading them as you save is code in your demo, not in the engine
+(<a href="#hot-reloading-shaders">Hot-reloading shaders</a>).
+</p>
+</blockquote>
+</div>
+</div>
+<div id="outline-container-4-the-begin-draw-end-loop" class="outline-2">
+<h2 id="4-the-begin-draw-end-loop"><span class="section-number-2">5.</span> 4. The begin, draw, end loop</h2>
+<div class="outline-text-2" id="text-4-the-begin-draw-end-loop">
+<p>
+Each frame, pump events (<code>mc_window_pump</code> returns 0 on <code>ESC</code> or when the window
+closes), tell the renderer the frame's time and build your matrices. Then call
+<code>mc_renderer_begin</code>, draw, and call <code>mc_renderer_end</code>. Matrices are
+column-major and <code>mc_m4_mul(a, b)</code> is <code>a * b</code>, so the view-projection is
+<code>proj * view</code>, but let <code>mc_renderer_camera</code> build it for you. It shifts the
+projection by a sub-pixel step each frame, and the post stack's TAA blends
+those frames into an anti-aliased picture. If you leave out
+<code>mc_renderer_frame</code> and <code>mc_renderer_camera</code>, you still get frames, just
+without anti-aliasing.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>double start = mc_time_seconds();
+while (mc_window_pump(w)) {
+    double t = mc_time_seconds() - start;
+    int ww, hh; mc_window_size(w, &amp;ww, &amp;hh);
+    mc_renderer_resize(R, ww, hh);                        // follow the window (same scale)
+    mc_renderer_frame(R, t);                              // TAA: this frame's time
+
+    mc_camera cam = mc_camera_default();
+    cam.pos = mc_vec3(4.0f * cosf((float)t), 1.5f, 4.0f * sinf((float)t));
+    mc_m4 view = mc_camera_view(&amp;cam);
+    mc_m4 proj = mc_camera_proj(&amp;cam, mc_renderer_aspect(R));
+    mc_m4 vp   = mc_renderer_camera(R, proj, view);       // proj * view, jittered
+
+    mc_quat q   = mc_quat_axis_angle(mc_vec3(0, 1, 0), (float)t);
+    mc_m4 model = mc_m4_trs(mc_vec3(0, 0, 0), q, mc_v3_splat(1.0f));
+
+    mc_renderer_begin(R, mc_vec3(0.02f, 0.02f, 0.05f));  // bind HDR target + clear
+    mc_shader_use(sh);
+    mc_set_m4(U_VIEWPROJ, vp);
+    mc_set_m4(U_MODEL, model);
+    mc_mesh_draw(gpu);
+
+    mc_post post = mc_post_defaults();
+    post.time = (float)t;                                 // animates grain
+    mc_renderer_end(R, mc_window_output_fbo(w), ww, hh, post);  // post -&gt; window
+
+    mc_window_swap(w);
+}
+</code></pre>
+</div>
+
+<p>
+<code>mc_window_output_fbo(w)</code> is framebuffer 0 on the windowed backend, so the post
+stack resolves straight to the screen. When the window is resized,
+<code>mc_renderer_resize</code> resizes the renderer to match, at the same scale, and the
+TAA's history starts over. If the size hasn't changed it returns straight away.
+A failed resize, to 0x0 for example, keeps the previous targets.
+</p>
+</div>
+<div id="outline-container-drawing-a-crowd-instancing" class="outline-3">
+<h3 id="drawing-a-crowd-instancing"><span class="section-number-3">5.1.</span> Drawing a crowd: instancing</h3>
+<div class="outline-text-3" id="text-drawing-a-crowd-instancing">
+<p>
+To draw many copies cheaply, fill an <code>mc_instance</code> array (a model matrix and an
+RGB + emissive colour for each) and issue one instanced draw. Size the buffer
+once, up front, so it doesn't reallocate during the animation. The instanced
+path needs a vertex shader that reads attributes 2-5 as the model matrix's
+columns and attribute 6 as the colour, like
+<code>demos/hello-world/shaders/object.vert</code>.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>mc_mesh_reserve_instances(&amp;gpu, 512);      // once, after upload
+/* each frame: */
+mc_instance inst[512];
+int n = 0;
+for (int i = 0; i &lt; 256; ++i) {
+    mc_m4 mdl = mc_m4_trs(/* position */, /* rotation */, /* scale */);
+    inst[n].model = mdl;
+    inst[n].color = mc_vec4(1.0f, 0.6f, 0.3f, 0.0f);  // .a = emissive
+    ++n;
+}
+mc_mesh_set_instances(&amp;gpu, inst, n);
+mc_mesh_draw_instanced(gpu, n);
+</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-5-add-the-synth" class="outline-2">
+<h2 id="5-add-the-synth"><span class="section-number-2">6.</span> 5. Add the synth</h2>
+<div class="outline-text-2" id="text-5-add-the-synth">
+<p>
+The synth renders interleaved stereo frames, and the audio backend runs it on
+its own thread. Drive your clock from <code>mc_audio_time()</code> so the visuals stay
+locked to the music. If audio fails to start, fall back to the wall clock.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>#include "microcosm/mc_audio.h"     // before mc_imports.h, like every header
+
+static void audio_pull(float *out, int frames, void *user) {
+    mc_synth_render((mc_synth *)user, out, frames);
+}
+
+mc_synth *synth = mc_synth_make(0x1234u);
+mc_audio *audio = mc_audio_start(audio_pull, synth);   // may be NULL
+/* in the loop: */
+double t = audio ? mc_audio_time(audio) : (mc_time_seconds() - start);
+/* at shutdown (step 6 explains MC_TIDY): */
+MC_TIDY(if (audio) mc_audio_stop(audio);
+        mc_synth_free(synth));
+</code></pre>
+</div>
+
+<p>
+Use the timeline helpers to sync motion to the beat:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>mc_timeline tl = { .t = t, .duration = mc_synth_length(synth), .bpm = mc_synth_bpm(synth) };
+float bounce = mc_beat_pulse(&amp;tl, 5.0f);   // 0..1 spike each beat
+</code></pre>
+</div>
+</div>
+</div>
+<div id="outline-container-6-clean-up" class="outline-2">
+<h2 id="6-clean-up"><span class="section-number-2">7.</span> 6. Clean up</h2>
+<div class="outline-text-2" id="text-6-clean-up">
+<div class="org-src-container">
+<pre class="src src-c"><code>MC_TIDY(mc_mesh_gpu_free(&amp;gpu);
+        mc_shader_free(&amp;sh);
+        mc_renderer_free(R);
+        mc_window_close(w));
+</code></pre>
+</div>
+
+<p>
+Put the cleanup inside <code>MC_TIDY(...)</code> from <code>mc.h</code>. The packed 64k build just
+exits and lets the OS take everything back, so <code>mc_window_close</code>,
+<code>mc_audio_stop</code> and <code>mc_mesh_gpu_free</code> aren't even declared there. <code>MC_TIDY</code>
+compiles its arguments out of that build, and every other build runs them.
+<a href="toolkit.html#mc-h-umbrella-types-utilities">The toolkit</a> has the
+details.
+</p>
+</div>
+</div>
+<div id="outline-container-the-complete-program" class="outline-2">
+<h2 id="the-complete-program"><span class="section-number-2">8.</span> The complete program</h2>
+<div class="outline-text-2" id="text-the-complete-program">
+<p>
+This is the whole windowed intro, put together from the steps above. Save it as
+<code>demos/my-intro/main.c</code>. It compiles cleanly with <code>-Wall -Wextra</code>, as an
+ordinary program and as a packed 64k file.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>/* demos/my-intro/main.c - a minimal MICROCOSM intro. */
+#include "microcosm/mc_platform.h"
+#include "microcosm/mc_render.h"
+#include "microcosm/mc_mesh.h"
+#include "microcosm/mc_scene.h"
+#include "microcosm/mc_math.h"
+#include "microcosm/mc.h"
+#include "microcosm/mc_audio.h"
+#include &lt;math.h&gt;
+#include "microcosm/mc_imports.h"   /* last: the packed build calls libraries through it */
+
+static const char *VS =
+    "#version 450 core\n"
+    "layout(location=0) in vec3 aPos;"
+    "layout(location=1) in vec3 aNormal;"
+    "layout(location=0) uniform mat4 uViewProj;"
+    "layout(location=1) uniform mat4 uModel;"
+    "out vec3 vN;"
+    "void main(){"
+    "  vN = mat3(uModel) * aNormal;"
+    "  gl_Position = uViewProj * uModel * vec4(aPos, 1.0);"
+    "}";
+
+static const char *FS =
+    "#version 450 core\n"
+    "in vec3 vN; out vec4 o;"
+    "void main(){"
+    "  vec3 L = normalize(vec3(0.4, 0.8, 0.3));"
+    "  float d = max(dot(normalize(vN), L), 0.0);"
+    "  vec3 col = vec3(0.05, 0.06, 0.1) + vec3(1.0, 0.6, 0.3) * d;"
+    "  o = vec4(col, 1.0);"
+    "}";
+
+static void audio_pull(float *out, int frames, void *user) {
+    mc_synth_render((mc_synth *)user, out, frames);
+}
+
+int main(void) {
+    mc_window_desc desc = { .width = 1280, .height = 720,
+                            .title = "my intro", .vsync = 1 };
+    mc_window *w = mc_window_open(&amp;desc);
+    if (!w) return 1;
+
+    mc_renderer *R = mc_renderer_make(1280, 720);
+    if (!R || !mc_renderer_set_scale(R, 75)) return 1;
+
+    mc_mesh m = mc_mesh_icosphere(1.0f, 3);
+    mc_mesh_displace_noise(&amp;m, 0.12f, 1.8f, 0xBEEFu);
+    mc_gpu_mesh gpu = mc_mesh_upload(&amp;m);
+    mc_mesh_free(&amp;m);
+
+    enum { U_VIEWPROJ = 0, U_MODEL = 1 };   // the shader's uniform locations
+    mc_shader sh = mc_shader_make(VS, FS);
+
+    mc_synth *synth = mc_synth_make(0x1234u);
+    mc_audio *audio = mc_audio_start(audio_pull, synth);
+
+    double start = mc_time_seconds();
+    while (mc_window_pump(w)) {
+        double t = audio ? mc_audio_time(audio) : (mc_time_seconds() - start);
+        int ww, hh;
+        mc_window_size(w, &amp;ww, &amp;hh);
+        mc_renderer_resize(R, ww, hh);
+        mc_renderer_frame(R, t);
+
+        mc_camera cam = mc_camera_default();
+        cam.pos = mc_vec3(4.0f * cosf((float)t), 1.5f, 4.0f * sinf((float)t));
+        mc_m4 view = mc_camera_view(&amp;cam);
+        mc_m4 proj = mc_camera_proj(&amp;cam, mc_renderer_aspect(R));
+        mc_m4 vp   = mc_renderer_camera(R, proj, view);
+
+        mc_quat q   = mc_quat_axis_angle(mc_vec3(0, 1, 0), (float)t);
+        mc_m4 model = mc_m4_trs(mc_vec3(0, 0, 0), q, mc_v3_splat(1.0f));
+
+        mc_renderer_begin(R, mc_vec3(0.02f, 0.02f, 0.05f));
+        mc_shader_use(sh);
+        mc_set_m4(U_VIEWPROJ, vp);
+        mc_set_m4(U_MODEL, model);
+        mc_mesh_draw(gpu);
+
+        mc_post post = mc_post_defaults();
+        post.time = (float)t;
+        mc_renderer_end(R, mc_window_output_fbo(w), ww, hh, post);
+
+        mc_window_swap(w);
+    }
+
+    /* the packed build leaves this out and just exits (step 6) */
+    MC_TIDY(if (audio) mc_audio_stop(audio);
+            mc_synth_free(synth);
+            mc_mesh_gpu_free(&amp;gpu);
+            mc_shader_free(&amp;sh);
+            mc_renderer_free(R);
+            mc_window_close(w));
+    return 0;
+}
+</code></pre>
+</div>
+</div>
+<div id="outline-container-dropping-it-into-demos" class="outline-3">
+<h3 id="dropping-it-into-demos"><span class="section-number-3">8.1.</span> Building it with make</h3>
+<div class="outline-text-3" id="text-dropping-it-into-demos">
+<p>
+Every directory under <code>demos/</code> with a <code>main.c</code> in it is a demo, and the
+Makefile builds it by name. With the program saved as <code>demos/my-intro/main.c</code>:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>make my-intro     # builds both binaries into build/my-intro/:
+                  #   my-intro-dev.bin  (debuggable, on-screen)
+                  #   my-intro.bin  (the 64k self-extractor)
+make my-intro PACK=quick   # the same, without the packer's slow search
+./build/my-intro/my-intro-dev.bin   # ESC to quit
+./build/my-intro/my-intro.bin       # the packed one
+make all          # build every demo under demos/
+make clean
+</code></pre>
+</div>
+
+<p>
+Each demo builds into its own <code>build/&lt;name&gt;/</code>, so demos never overwrite each
+other's files. <code>make &lt;demo&gt;</code> builds that demo's two binaries, and a bare <code>make</code>
+(the same as <code>make all</code>) builds every demo under <code>demos/</code>. This intro keeps its
+GLSL in C strings, so it needs nothing else in its directory.
+<a href="#what-a-demo-directory-needs">What a demo directory needs</a> covers the rest:
+shader files, the <code>programs.def</code> manifest and the import list. Copying
+<code>demos/hello-world/</code> is another way to start, with all of that already in
+place.
+</p>
+</div>
+</div>
+<div id="outline-container-building-it" class="outline-3">
+<h3 id="building-it"><span class="section-number-3">8.2.</span> Building it by hand</h3>
+<div class="outline-text-3" id="text-building-it">
+<p>
+You can also compile the program yourself, against the engine sources, with
+exactly one platform backend (<code>platform_x11_egl.c</code> for a window). Generate the
+engine's shader header first, as in step 0:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><code>gcc -Wall -Wextra -Iinclude -Ibuild/inc \
+    src/math.c src/gl_loader.c src/platform_common.c \
+    src/mesh.c src/render.c src/scene.c src/synth.c src/audio.c \
+    src/platform_x11_egl.c demos/my-intro/main.c \
+    -lEGL -lX11 -lm -lpthread -lasound -o mintro
+./mintro            # ESC to quit
+</code></pre>
+</div>
+
+<p>
+That gives you the windowed program only. The packed file needs the release
+build, which is what <code>make</code> is for.
+</p>
+</div>
+</div>
+<div id="outline-container-scrubbing-while-you-work" class="outline-3">
+<h3 id="scrubbing-while-you-work"><span class="section-number-3">8.3.</span> Scrubbing while you work</h3>
+<div class="outline-text-3" id="text-scrubbing-while-you-work">
+<p>
+It's worth giving your dev build (<code>&lt;name&gt;-dev.bin</code>) the transport the
+reference demo uses to inspect its timeline. SPACE pauses, LEFT and RIGHT jump
+5 seconds, and UP and DOWN double or halve the speed. Look for <code>dev_transport</code>
+in <code>demos/hello-world/main.c</code>. It's defined under
+<code>#if !defined(MC_RELEASE) &amp;&amp; !defined(MC_HEADLESS) &amp;&amp; !defined(MC_CAPTURE)</code>
+and called only outside the release and headless builds, so it costs nothing in
+the shipped file. If your intro simulates anything, it has to be able to jump
+backwards too, which the demo's <code>sim_seek</code> does by replaying from a fixed seed.
+Being able to stop on one frame and step back and forth around it makes tuning
+a transition much quicker.
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-7-build-for-size" class="outline-2">
+<h2 id="7-build-for-size"><span class="section-number-2">9.</span> 7. Build for size</h2>
+<div class="outline-text-2" id="text-7-build-for-size">
+<p>
+<code>make my-intro</code> already does this: the release half of the build is the 64k
+pipeline. In short, these are its main steps:
+</p>
+
+<ol class="org-ol">
+<li>Minify and bake the shaders, the demo's and the engine's post-pass ones,
+into headers:
+<code>python3 tools/genshaders.py demos/my-intro/shaders -o build/my-intro/shaders_gen.h --engine src/shaders --engine-output build/my-intro/mc_engine_shaders.h</code>.
+A demo with shader files has to include the first header in its release
+build (<a href="#shaders-on-disk-need-shaders-gen-h">Shaders on disk need shaders_gen.h</a>).</li>
+<li>Compile for size. Use the release flags
+(<code>-Oz -ffast-math -flto -ffunction-sections -fdata-sections -fno-pic -fno-pie -fvisibility=hidden -DMC_RELEASE ...</code>),
+plus <code>-DMC_IMPORT_HASH</code> for the payload, and link with
+<code>--gc-sections -z norelro -s ...</code> and the payload's own entry point,
+<code>src/mc_start.c</code>. The full set is in the <code>Makefile</code> (<code>REL_FLAGS</code>,
+<code>REL_LDFLAGS</code>, <code>PAYLOAD_DEFS</code> and <code>PAYLOAD_LDFLAGS</code>).</li>
+<li>Strip the ELF with <code>python3 tools/elfshrink.py build/you.elf -o build/you.elf --verify</code>.</li>
+<li>Pack it into one ELF. <code>tools/mkelf.sh build/you.elf you.bin</code> produces a
+self-extracting ELF: the coded program inside a libc-free launcher that
+decodes it with a context-mixing model and runs it from memory. Before it
+writes the file, it checks that the file decompresses back to the original
+ELF and fits in 65,536 bytes.</li>
+</ol>
+
+<p>
+For the reference demo, that turns a release ELF of about 249 KB into the
+63,237-byte <code>hello-world.bin</code>. The pipeline doc tells the whole story, from
+<a href="pipeline.html#the-size-flags-grouped">the flags</a> to
+<a href="pipeline.html#the-tools">the tools</a> and
+<a href="pipeline.html#the-real-numbers">where the bytes go</a>. Its tools
+section also covers the steps the Makefile adds to these four.
+</p>
+</div>
+</div>
+<div id="outline-container-what-a-demo-directory-needs" class="outline-2">
+<h2 id="what-a-demo-directory-needs"><span class="section-number-2">10.</span> What a demo directory needs</h2>
+<div class="outline-text-2" id="text-what-a-demo-directory-needs">
+<p>
+The Makefile treats every <code>demos/&lt;name&gt;/main.c</code> as a demo, and <code>make &lt;name&gt;</code>
+builds it. This is what the build expects to find in the directory, and what
+it leaves to your code.
+</p>
+
+<pre class="example" id="org8ef2693">
+demos/my-intro/
+├── main.c          required, and the only file the Makefile compiles
+├── programs.def    the program manifest, if the demo has shaders/
+├── shaders/        optional: *.vert, *.frag, *.comp and *.glsl files
+└── *.c, *.def      anything else main.c includes
+</pre>
+
+<p>
+The Makefile compiles <code>main.c</code> and nothing else from the directory. To split a
+demo into several files, <code>#include</code> them from <code>main.c</code>, as the reference demo
+does with <code>scene3.c</code>. Make tracks those includes, so editing one rebuilds the
+demo.
+</p>
+</div>
+<div id="outline-container-shaders-on-disk-need-shaders-gen-h" class="outline-3">
+<h3 id="shaders-on-disk-need-shaders-gen-h"><span class="section-number-3">10.1.</span> Shaders on disk need shaders_gen.h</h3>
+<div class="outline-text-3" id="text-shaders-on-disk-need-shaders-gen-h">
+<p>
+If <code>demos/&lt;name&gt;/shaders/</code> holds any shader files, the release build minifies
+them together with the engine's post-pass shaders and bakes them all into one
+blob in <code>build/&lt;name&gt;/shaders_gen.h</code>. The engine then gets its own shaders
+through <code>mc_shader_at()</code>, which only that header defines. So your <code>main.c</code> has
+to include it under <code>MC_RELEASE</code>, or the payload's link fails with
+<code>undefined reference to `mc_shader_at'</code>. The header also gives each program's
+two sources by index:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>#ifdef MC_RELEASE
+#include "shaders_gen.h"   /* in build/&lt;name&gt;/, which is on the release include path */
+static mc_shader program_source(int i) {
+    return mc_shader_make(mc_shader_at(mc_program_shaders[i][0]),
+                          mc_shader_at(mc_program_shaders[i][1]));
+}
+#endif
+</code></pre>
+</div>
+
+<p>
+<code>mc_program_shaders[i]</code> holds the blob indices of program <code>i</code>'s two files, in
+<code>programs.def</code> order (next section). <code>mc_demo_shader("name.frag")</code> finds a
+shader by file name instead, but the payload's compile leaves it out because
+the payload has no <code>strcmp</code>, so only tools and checks can use it. The dev build
+doesn't get this header at all. There your code reads the files itself, from
+<code>MC_SHADER_ROOT</code>, the absolute path of <code>demos/&lt;name&gt;/shaders</code> that Make passes
+to the dev compile.
+</p>
+
+<p>
+A demo without shader files, like the intro above, needs none of this. Its
+engine shaders go into a header of their own. See
+<a href="pipeline.html#genshaders-py-bake-shaders-into-headers"><code>genshaders.py</code></a>
+for how the bake works.
+</p>
+</div>
+</div>
+<div id="outline-container-the-programs-def-manifest" class="outline-3">
+<h3 id="the-programs-def-manifest"><span class="section-number-3">10.2.</span> The programs.def manifest</h3>
+<div class="outline-text-3" id="text-the-programs-def-manifest">
+<p>
+<code>demos/&lt;name&gt;/programs.def</code> lists the demo's shader programs, and
+<code>genshaders.py</code> reads it to build <code>mc_program_shaders</code>. It's an X-macro list,
+with one entry per line:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>/* demos/my-intro/programs.def */
+MC_PROGRAM(blob,  "blob.vert",  "blob.frag")
+MC_PROGRAM(place, "place.comp", "place.comp")   /* compute: its one file, twice */
+MC_BAKE("quad.vert", "bake.frag")               /* drawn once at load */
+#include "more.def"                             /* more entries, in place */
+</code></pre>
+</div>
+
+<p>
+Each entry is <code>MC_PROGRAM(field, "vertex file", "fragment file")</code> or
+<code>MC_BAKE("vertex file", "fragment file")</code>, naming files in <code>shaders/</code>. The
+script treats the two the same: counting from 0 in file order, with included
+manifests expanded where they're included, entry <code>i</code> becomes
+<code>mc_program_shaders[i]</code>. It reads the file a line at a time, so keep each entry
+on one line, with both file names as string literals. A compute program names
+its <code>.comp</code> file twice, and <code>mc_shader_make</code> builds a compute program when both
+stages get the same source.
+</p>
+
+<p>
+What <code>field</code> and the difference between the two macros mean is up to your C
+code. <code>main.c</code> defines <code>MC_PROGRAM</code> and <code>MC_BAKE</code>, includes the file, and gets
+an enum of program numbers, a struct field per program or a table of file
+names for the dev build, all in the same order. The reference demo does all
+three, so look for <code>programs.def</code> in its <code>main.c</code>. There a bake gets no field,
+because it's used once and freed. Make treats every <code>*.def</code> in the directory as
+an input of the bake, so editing the manifest bakes the shaders again.
+</p>
+</div>
+</div>
+<div id="outline-container-mc-imports-h-goes-last" class="outline-3">
+<h3 id="mc-imports-h-goes-last"><span class="section-number-3">10.3.</span> mc_imports.h goes last</h3>
+<div class="outline-text-3" id="text-mc-imports-h-goes-last">
+<p>
+Include <code>microcosm/mc_imports.h</code> in <code>main.c</code> after every other header, the
+system headers too. In the payload build (<code>MC_IMPORT_HASH</code>) it turns each
+library function on its list into a macro that calls through a table, which
+the payload's entry point fills by name hash
+(<a href="pipeline.html#keeping-libc-dropping-the-crt-and-the-import-table">the pipeline doc</a>
+explains why). Each macro takes its type from the system header's declaration,
+so that header has to come first. A system header included after it would have
+its own declarations rewritten and fail to compile.
+</p>
+
+<p>
+Leave the include out and your own calls go to the libraries by name. In the
+intro above GCC can even merge the <code>sinf</code> and <code>cosf</code> of one angle into one
+<code>sincosf</code>, which isn't on the list at all. In every other build the header is
+empty, so a mistake here only shows in the packed file.
+</p>
+</div>
+</div>
+<div id="outline-container-free-and-realloc" class="outline-3">
+<h3 id="free-and-realloc"><span class="section-number-3">10.4.</span> free and realloc</h3>
+<div class="outline-text-3" id="text-free-and-realloc">
+<p>
+The import list holds what the reference demo's payload calls, and that doesn't
+include <code>free</code> or <code>realloc</code>, because the demo builds every mesh in its
+shaders. The CPU mesh builders grow their arrays with <code>realloc</code>, and
+<code>mc_mesh_free</code> and <code>mc_mesh_upload</code> call <code>free</code>. If your intro uses them, as
+the one above does, its payload imports those two by name. It still builds and
+runs, but it then carries a symbol table, a glibc version requirement and two
+relocations. In the intro above that's about 100 bytes of the packed file.
+</p>
+
+<p>
+To have them found by hash like everything else, add them to
+<code>include/microcosm/mc_imports.h</code>, to the list and beside <code>calloc</code>'s macro:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-c"><code>#define MC_IMPORTS(X) \
+    X(malloc) X(calloc) X(realloc) X(free) X(getenv) X(strtol) \
+    ...
+#define calloc          MC_IMP(calloc)
+#define realloc         MC_IMP(realloc)
+#define free            MC_IMP(free)
+</code></pre>
+</div>
+
+<p>
+<code>tools/genimports.py</code> hashes the new list on the next build. The list is
+shared by every demo, though, and the reference demo's payload calls neither
+function. Its build checks strictly that every import is used
+(<a href="pipeline.html#importcheck-py-the-payload-resolves-only-what-it-calls"><code>importcheck.py</code></a>),
+so after that change <code>make hello-world</code> fails with "the payload resolves these
+at startup but never calls them". Build it with
+<code>make hello-world IMPORTCHECK=warn</code> from then on, which costs it a few bytes.
+Other demos are only warned about unused imports anyway.
+</p>
+</div>
+</div>
+<div id="outline-container-hot-reloading-shaders" class="outline-3">
+<h3 id="hot-reloading-shaders"><span class="section-number-3">10.5.</span> Hot-reloading shaders</h3>
+<div class="outline-text-3" id="text-hot-reloading-shaders">
+<p>
+The engine doesn't watch files. Reading GLSL from disk and reloading it when it
+changes is the reference demo's own code, in its <code>main.c</code> under
+<code>#ifndef MC_RELEASE</code>. <code>build_program</code> reads a program's two files from
+<code>MC_SHADER_ROOT</code>. <code>maybe_reload_shaders</code>, called once a frame, hashes the files
+every quarter of a second and rebuilds the programs whose files changed. Then
+it swaps them all in together, or keeps the old ones if any of them fails to
+compile. Copy those functions if you want the same in your demo. The release
+build has no <code>MC_SHADER_ROOT</code> and reads nothing from disk.
+</p>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,27 @@
+/* One dependency manifest for startup, hot reload and shader validation. */
+MC_PROGRAM(sky, "far.vert", "sky.frag")
+MC_PROGRAM(obj, "object.vert", "object.frag")
+MC_PROGRAM(grnd, "ground.vert", "ground.frag")
+MC_PROGRAM(blobsh, "blob.vert", "blob.frag")
+MC_PROGRAM(space, "sky.vert", "space.frag")
+MC_PROGRAM(planet_sh, "planet.vert", "planet.frag")
+MC_PROGRAM(atmo, "planet.vert", "atmo.frag")
+MC_PROGRAM(moon_sh, "planet.vert", "moon.frag")
+MC_PROGRAM(ocean_sh, "ocean.vert", "ocean.frag")
+MC_PROGRAM(water, "far.vert", "water.frag")
+MC_PROGRAM(dip, "sky.vert", "dip.frag")
+MC_PROGRAM(uwsurf, "object.vert", "uwsurf.frag")
+MC_PROGRAM(uwrock, "rock.vert", "uwsurf.frag")
+MC_PROGRAM(fishsh, "fish.vert", "fish.frag")
+MC_PROGRAM(algaesh, "algae.vert", "algae.frag")
+MC_PROGRAM(whalesh, "fish.vert", "whale.frag")
+MC_PROGRAM(coralsh, "coral.vert", "coral.frag")
+MC_PROGRAM(uwplace, "uwplace.comp", "uwplace.comp")   /* compute: the seabed's props, placed at load */
+MC_PROGRAM(shadowrock, "rock.vert", "shadow.frag")
+MC_PROGRAM(shadowfish, "fish.vert", "shadow.frag")
+MC_PROGRAM(shadowcoral, "coral.vert", "shadow.frag")
+MC_PROGRAM(shadowalgae, "algae.vert", "shadow.frag")
+MC_PROGRAM(shadowsh, "object.vert", "shadow.frag")
+MC_PROGRAM(jellysh, "jelly.vert", "jelly.frag")       /* scene 2: the moon jellies */
+MC_BAKE("sky.vert", "uwbake.frag")
+#include "scene3.def"   /* the jungle (scene 3): one manifest per package */
